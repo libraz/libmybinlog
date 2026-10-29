@@ -1,0 +1,39 @@
+{
+  "description": "GTID position text by flavor, shape and anomaly. Rows are implemented by CodecGtidText.PairwiseTextModel in the same order. MariaDB sequence numbers are unsigned 64-bit, so gno0 and gno_int64max are accepted there; MySQL GNOs must satisfy 1 <= gno < INT64_MAX.",
+  "generator": { "tool": "coverwise pairwise_generate", "strength": 2, "seed": 1 },
+  "model": {
+    "flavor": ["MySQL", "MariaDB"],
+    "shape": ["empty", "separators_only", "single", "interval", "multi_uuid", "tagged", "multi_domain"],
+    "anomaly": ["none", "gno0", "gno_int64max", "bad_tag"]
+  },
+  "constraints": [
+    "IF flavor = MariaDB THEN shape IN {empty, separators_only, single, multi_domain}",
+    "IF flavor = MySQL THEN shape != multi_domain",
+    "IF shape IN {empty, separators_only} THEN anomaly = none",
+    "IF anomaly = bad_tag THEN shape = tagged"
+  ],
+  "columns": ["flavor", "shape", "anomaly"],
+  "rows": [
+    ["MariaDB", "separators_only", "none"],
+    ["MySQL", "separators_only", "none"],
+    ["MariaDB", "multi_domain", "gno_int64max"],
+    ["MySQL", "interval", "gno_int64max"],
+    ["MariaDB", "single", "gno0"],
+    ["MariaDB", "multi_domain", "gno0"],
+    ["MariaDB", "empty", "none"],
+    ["MariaDB", "multi_domain", "none"],
+    ["MySQL", "interval", "none"],
+    ["MySQL", "multi_uuid", "gno0"],
+    ["MySQL", "single", "gno_int64max"],
+    ["MySQL", "multi_uuid", "none"],
+    ["MySQL", "multi_uuid", "gno_int64max"],
+    ["MySQL", "tagged", "none"],
+    ["MySQL", "tagged", "bad_tag"],
+    ["MariaDB", "single", "none"],
+    ["MySQL", "interval", "gno0"],
+    ["MySQL", "empty", "none"],
+    ["MySQL", "tagged", "gno0"],
+    ["MySQL", "tagged", "gno_int64max"]
+  ],
+  "coverage": { "tuples": 35, "covered": 35 }
+}
