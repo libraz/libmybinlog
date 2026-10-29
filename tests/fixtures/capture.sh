@@ -92,7 +92,7 @@ capture() {
     sleep 1
   done
 
-  local q=("$client" -uroot -h127.0.0.1 --protocol=TCP -N -B)
+  local q=("$client" -uroot -h127.0.0.1 --protocol=TCP --default-character-set=utf8mb4 -N -B)
   docker exec "$cname" "${q[@]}" -e 'FLUSH BINARY LOGS'
   local file
   file="$(docker exec "$cname" "${q[@]}" -e 'SHOW BINARY LOGS' | tail -1 | cut -f1)"
