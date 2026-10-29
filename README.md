@@ -1,44 +1,42 @@
 # libmybinlog
 
 [![CI](https://img.shields.io/github/actions/workflow/status/libraz/libmybinlog/ci.yml?branch=main&label=CI)](https://github.com/libraz/libmybinlog/actions)
+[![Version](https://img.shields.io/github/v/release/libraz/libmybinlog?label=version)](https://github.com/libraz/libmybinlog/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libmybinlog/blob/main/LICENSE)
-[![C++](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://github.com/libraz/libmybinlog)
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-lightgrey)](https://github.com/libraz/libmybinlog)
 
-**A C++17 library that decodes the MySQL and MariaDB binlog wire format.**
+**libmybinlog turns MySQL and MariaDB binlog bytes into typed events and row values.** It reads a binlog file or the event stream of a replication connection that you already hold, so it has no network code, no exceptions and no RTTI. It depends on zlib, and optionally on zstd.
 
-It works on bytes you already hold, from a binlog file or a replication stream, so it has no network code, no exceptions and no RTTI. It depends on zlib, and optionally on zstd.
-
-**[Documentation (English)](https://github.com/libraz/libmybinlog/blob/main/docs/en/introduction.md)** · **[ドキュメント (日本語)](https://github.com/libraz/libmybinlog/blob/main/docs/ja/introduction.md)** · **[Supported servers](https://github.com/libraz/libmybinlog/blob/main/docs/en/compatibility.md)**
+📖 **[Documentation](https://github.com/libraz/libmybinlog/blob/main/docs/en/introduction.md)** &nbsp;·&nbsp; **[Getting started](https://github.com/libraz/libmybinlog/blob/main/docs/en/getting-started.md)** &nbsp;·&nbsp; **[Supported servers](https://github.com/libraz/libmybinlog/blob/main/docs/en/compatibility.md)**
 
 > Pre-1.0: the API may still change between minor releases.
 
 ## What's inside
 
-- **Streaming decoder**: feed bytes in any split, take typed events one at a time ([guide](https://github.com/libraz/libmybinlog/blob/main/docs/en/decoder.md)).
-- **Row images**: FULL, MINIMAL and NOBLOB images decoded into structured values ([guide](https://github.com/libraz/libmybinlog/blob/main/docs/en/rows.md)).
-- **JSON**: MySQL binary JSON to server-identical text, and partial JSON updates applied ([guide](https://github.com/libraz/libmybinlog/blob/main/docs/en/json.md)).
-- **Compression**: MariaDB zlib events and MySQL zstd transaction payloads expanded ([guide](https://github.com/libraz/libmybinlog/blob/main/docs/en/compression.md)).
-- **Checksums and GTIDs**: per-file CRC32 handling, MySQL GTID sets with tags, MariaDB positions ([checksums](https://github.com/libraz/libmybinlog/blob/main/docs/en/checksums.md), [GTIDs](https://github.com/libraz/libmybinlog/blob/main/docs/en/gtids.md)).
-- **Low-level API**: every per-event parser the decoder uses is public ([guide](https://github.com/libraz/libmybinlog/blob/main/docs/en/low-level-api.md)).
+- **Streaming decoder** — feed bytes in any split and take typed events one at a time. [The Decoder](https://github.com/libraz/libmybinlog/blob/main/docs/en/decoder.md)
+- **Row images** — FULL, MINIMAL and NOBLOB images decoded into structured values, with absent columns kept apart from NULL. [Rows](https://github.com/libraz/libmybinlog/blob/main/docs/en/rows.md) · [Values](https://github.com/libraz/libmybinlog/blob/main/docs/en/values.md)
+- **JSON** — MySQL binary JSON rendered as the server's own text, and partial JSON updates applied. [JSON](https://github.com/libraz/libmybinlog/blob/main/docs/en/json.md)
+- **Compressed events** — MariaDB zlib events and MySQL zstd transaction payloads expanded. [Compressed events](https://github.com/libraz/libmybinlog/blob/main/docs/en/compression.md)
+- **Checksums and GTIDs** — per-file CRC32 handling, MySQL GTID sets with tags, MariaDB GTID positions. [Checksums](https://github.com/libraz/libmybinlog/blob/main/docs/en/checksums.md) · [GTIDs](https://github.com/libraz/libmybinlog/blob/main/docs/en/gtids.md)
+- **Safety checks** — event classification for readers that must not lose data, and static server-setting rules. [Event disposition](https://github.com/libraz/libmybinlog/blob/main/docs/en/disposition.md) · [Server settings](https://github.com/libraz/libmybinlog/blob/main/docs/en/server-settings.md)
+- **Low-level API** — every per-event parser the decoder uses is public. [Low-level API](https://github.com/libraz/libmybinlog/blob/main/docs/en/low-level-api.md)
 
 ## Installation
-
-Add it with CMake `FetchContent`, pinned to a tag or commit:
 
 ```cmake
 include(FetchContent)
 FetchContent_Declare(
   libmybinlog
   GIT_REPOSITORY https://github.com/libraz/libmybinlog.git
-  GIT_TAG <tag-or-commit>
+  GIT_TAG v0.1.0
 )
 FetchContent_MakeAvailable(libmybinlog)
 
 target_link_libraries(your_target PRIVATE mybinlog::mybinlog)
 ```
 
-An installed copy is found with `find_package(mybinlog)` or `pkg-config mybinlog`. Build options and zstd support are described in [Getting started](https://github.com/libraz/libmybinlog/blob/main/docs/en/getting-started.md).
+An installed copy is found with `find_package(mybinlog)` or `pkg-config mybinlog`.
 
 ## Quick start
 
@@ -67,17 +65,30 @@ void PrintRowCounts(const uint8_t* data, size_t size) {
 }
 ```
 
-[`examples/mybinlog-dump`](https://github.com/libraz/libmybinlog/blob/main/examples/mybinlog-dump/main.cpp) prints every event of a binlog file as JSON Lines.
+[`examples/mybinlog-dump`](https://github.com/libraz/libmybinlog/blob/main/examples/mybinlog-dump/main.cpp) prints every event of a binlog file as JSON Lines. → [The Decoder](https://github.com/libraz/libmybinlog/blob/main/docs/en/decoder.md)
 
-## Build and test
+## Build from source
 
-```sh
+```bash
 make build         # configure and compile into build/
-make test          # run the unit tests
-make format        # clang-format, then clang-tidy
-make format-check  # the same checks without modifying files
+make test          # build, then run the tests
+make format-check  # clang-format check and clang-tidy
 ```
+
+Build options (`MYBINLOG_WITH_ZSTD`, `MYBINLOG_BUILD_TESTS`, `MYBINLOG_INSTALL`, `MYBINLOG_BUILD_EXAMPLES`) are covered in [Getting started](https://github.com/libraz/libmybinlog/blob/main/docs/en/getting-started.md).
+
+## Documentation
+
+The guides live in [`docs/en`](https://github.com/libraz/libmybinlog/blob/main/docs/en/introduction.md).
+
+- **Learn** — [Introduction](https://github.com/libraz/libmybinlog/blob/main/docs/en/introduction.md) · [Getting started](https://github.com/libraz/libmybinlog/blob/main/docs/en/getting-started.md) · [FAQ](https://github.com/libraz/libmybinlog/blob/main/docs/en/faq.md)
+- **Guides** — [The Decoder](https://github.com/libraz/libmybinlog/blob/main/docs/en/decoder.md) · [Rows](https://github.com/libraz/libmybinlog/blob/main/docs/en/rows.md) · [Values](https://github.com/libraz/libmybinlog/blob/main/docs/en/values.md) · [JSON](https://github.com/libraz/libmybinlog/blob/main/docs/en/json.md) · [Compressed events](https://github.com/libraz/libmybinlog/blob/main/docs/en/compression.md) · [Checksums](https://github.com/libraz/libmybinlog/blob/main/docs/en/checksums.md) · [GTIDs](https://github.com/libraz/libmybinlog/blob/main/docs/en/gtids.md) · [Event disposition](https://github.com/libraz/libmybinlog/blob/main/docs/en/disposition.md) · [Server settings](https://github.com/libraz/libmybinlog/blob/main/docs/en/server-settings.md) · [Low-level API](https://github.com/libraz/libmybinlog/blob/main/docs/en/low-level-api.md)
+- **Reference** — [API reference](https://github.com/libraz/libmybinlog/blob/main/docs/en/api-reference.md) · [Errors and validation](https://github.com/libraz/libmybinlog/blob/main/docs/en/errors-and-validation.md) · [Compatibility](https://github.com/libraz/libmybinlog/blob/main/docs/en/compatibility.md) · [Glossary](https://github.com/libraz/libmybinlog/blob/main/docs/en/glossary.md)
+
+## Non-goals
+
+libmybinlog decodes the format and stops there. It is not a replication client (connecting, authenticating and requesting the dump are the caller's job), not a SQL parser (QUERY events give statement text), and not a change-data-capture policy (it classifies events; the caller decides what to do). Windows is not tested. See [Introduction](https://github.com/libraz/libmybinlog/blob/main/docs/en/introduction.md#what-it-is-not) for the details.
 
 ## License
 
-Apache-2.0. See [LICENSE](https://github.com/libraz/libmybinlog/blob/main/LICENSE).
+[Apache-2.0](LICENSE)
