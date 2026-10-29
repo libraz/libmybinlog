@@ -1,0 +1,1521 @@
+{
+  "flavor": "mariadb",
+  "image": "mariadb:10.11",
+  "version": "10.11",
+  "config": "none_full_metaminimal_nozlib",
+  "server_version": "10.11.19-MariaDB-ubu2204-log",
+  "settings": {
+    "binlog_checksum": "NONE",
+    "binlog_row_image": "FULL",
+    "binlog_row_metadata": "MINIMAL",
+    "log_bin_compress": "OFF"
+  },
+  "server_settings": {
+    "binlog_checksum": "NONE",
+    "binlog_row_image": "FULL",
+    "binlog_row_metadata": "MINIMAL",
+    "binlog_format": "ROW",
+    "log_bin_compress": "OFF",
+    "log_bin_compress_min_len": 256,
+    "binlog_annotate_row_events": "ON",
+    "column_compression_threshold": 100,
+    "server_id": 1,
+    "gtid_domain_id": 0
+  },
+  "server_flags": [
+    "--server-id=1",
+    "--log-bin=binlog",
+    "--binlog-format=ROW",
+    "--binlog-checksum=NONE",
+    "--binlog-row-image=FULL",
+    "--binlog-row-metadata=MINIMAL",
+    "--binlog-annotate-row-events=ON",
+    "--log-bin-compress=OFF"
+  ],
+  "workload": "workload_mariadb.sql",
+  "database": "mx",
+  "session": {
+    "sql_mode": "",
+    "time_zone": "+00:00"
+  },
+  "binlog_files": [
+    "binlog.000003"
+  ],
+  "tables": [
+    {
+      "name": "t_big",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "n",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "mt",
+          "data_type": "mediumtext",
+          "column_type": "mediumtext",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "j",
+          "data_type": "longtext",
+          "column_type": "longtext",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    },
+    {
+      "name": "t_bulk",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "a",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "s",
+          "data_type": "varchar",
+          "column_type": "varchar(16)",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    },
+    {
+      "name": "t_enum",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "ordinal",
+          "pk_seq": 0,
+          "name": "e1",
+          "data_type": "enum",
+          "column_type": "enum('a','b','c')",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "ordinal",
+          "pk_seq": 0,
+          "name": "e2",
+          "data_type": "enum",
+          "column_type": "enum('v000','v001','v002','v003','v004','v005','v006','v007','v008','v009','v010','v011','v012','v013','v014','v015','v016','v017','v018','v019','v020','v021','v022','v023','v024','v025','v026','v027','v028','v029','v030','v031','v032','v033','v034','v035','v036','v037','v038','v039','v040','v041','v042','v043','v044','v045','v046','v047','v048','v049','v050','v051','v052','v053','v054','v055','v056','v057','v058','v059','v060','v061','v062','v063','v064','v065','v066','v067','v068','v069','v070','v071','v072','v073','v074','v075','v076','v077','v078','v079','v080','v081','v082','v083','v084','v085','v086','v087','v088','v089','v090','v091','v092','v093','v094','v095','v096','v097','v098','v099','v100','v101','v102','v103','v104','v105','v106','v107','v108','v109','v110','v111','v112','v113','v114','v115','v116','v117','v118','v119','v120','v121','v122','v123','v124','v125','v126','v127','v128','v129','v130','v131','v132','v133','v134','v135','v136','v137','v138','v139','v140','v141','v142','v143','v144','v145','v146','v147','v148','v149','v150','v151','v152','v153','v154','v155','v156','v157','v158','v159','v160','v161','v162','v163','v164','v165','v166','v167','v168','v169','v170','v171','v172','v173','v174','v175','v176','v177','v178','v179','v180','v181','v182','v183','v184','v185','v186','v187','v188','v189','v190','v191','v192','v193','v194','v195','v196','v197','v198','v199','v200','v201','v202','v203','v204','v205','v206','v207','v208','v209','v210','v211','v212','v213','v214','v215','v216','v217','v218','v219','v220','v221','v222','v223','v224','v225','v226','v227','v228','v229','v230','v231','v232','v233','v234','v235','v236','v237','v238','v239','v240','v241','v242','v243','v244','v245','v246','v247','v248','v249','v250','v251','v252','v253','v254','v255','v256','v257','v258','v259','v260','v261','v262','v263','v264','v265','v266','v267','v268','v269','v270','v271','v272','v273','v274','v275','v276','v277','v278','v279','v280','v281','v282','v283','v284','v285','v286','v287','v288','v289','v290','v291','v292','v293','v294','v295','v296','v297','v298','v299')",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "ordinal",
+          "pk_seq": 0,
+          "name": "s1",
+          "data_type": "set",
+          "column_type": "set('x','y','z')",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "ordinal",
+          "pk_seq": 0,
+          "name": "s2",
+          "data_type": "set",
+          "column_type": "set('m00','m01','m02','m03','m04','m05','m06','m07','m08','m09','m10','m11')",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "ordinal",
+          "pk_seq": 0,
+          "name": "s8",
+          "data_type": "set",
+          "column_type": "set('b00','b01','b02','b03','b04','b05','b06','b07','b08','b09','b10','b11','b12','b13','b14','b15','b16','b17','b18','b19','b20','b21','b22','b23','b24','b25','b26','b27','b28','b29','b30','b31','b32','b33','b34','b35','b36','b37','b38','b39','b40','b41','b42','b43','b44','b45','b46','b47','b48','b49','b50','b51','b52','b53','b54','b55','b56','b57','b58','b59','b60','b61','b62','b63')",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    },
+    {
+      "name": "t_geo",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "hex",
+          "pk_seq": 0,
+          "name": "g",
+          "data_type": "geometry",
+          "column_type": "geometry",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "hex",
+          "pk_seq": 0,
+          "name": "p",
+          "data_type": "point",
+          "column_type": "point",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "hex",
+          "pk_seq": 0,
+          "name": "pg",
+          "data_type": "polygon",
+          "column_type": "polygon",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    },
+    {
+      "name": "t_inet4",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "n",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "canonical_text",
+          "pk_seq": 0,
+          "name": "v4",
+          "data_type": "inet4",
+          "column_type": "inet4",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    },
+    {
+      "name": "t_int",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "ti",
+          "data_type": "tinyint",
+          "column_type": "tinyint(4)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "tu",
+          "data_type": "tinyint",
+          "column_type": "tinyint(3) unsigned",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "si",
+          "data_type": "smallint",
+          "column_type": "smallint(6)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "su",
+          "data_type": "smallint",
+          "column_type": "smallint(5) unsigned",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "mi",
+          "data_type": "mediumint",
+          "column_type": "mediumint(9)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "mu",
+          "data_type": "mediumint",
+          "column_type": "mediumint(8) unsigned",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "i",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "iu",
+          "data_type": "int",
+          "column_type": "int(10) unsigned",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "bi",
+          "data_type": "bigint",
+          "column_type": "bigint(20)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "bu",
+          "data_type": "bigint",
+          "column_type": "bigint(20) unsigned",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    },
+    {
+      "name": "t_json",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "n",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "j",
+          "data_type": "longtext",
+          "column_type": "longtext",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    },
+    {
+      "name": "t_lob",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "n",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "tt",
+          "data_type": "tinytext",
+          "column_type": "tinytext",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "tx",
+          "data_type": "text",
+          "column_type": "text",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "mt",
+          "data_type": "mediumtext",
+          "column_type": "mediumtext",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "lt",
+          "data_type": "longtext",
+          "column_type": "longtext",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "hex",
+          "pk_seq": 0,
+          "name": "tb",
+          "data_type": "tinyblob",
+          "column_type": "tinyblob",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "hex",
+          "pk_seq": 0,
+          "name": "bl",
+          "data_type": "blob",
+          "column_type": "blob",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "hex",
+          "pk_seq": 0,
+          "name": "mb",
+          "data_type": "mediumblob",
+          "column_type": "mediumblob",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "hex",
+          "pk_seq": 0,
+          "name": "lb",
+          "data_type": "longblob",
+          "column_type": "longblob",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    },
+    {
+      "name": "t_mdb",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "n",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "hex",
+          "pk_seq": 0,
+          "name": "cb",
+          "data_type": "blob",
+          "column_type": "blob /*M!100301 COMPRESSED*/",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "YES"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "ct",
+          "data_type": "text",
+          "column_type": "text /*M!100301 COMPRESSED*/",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "YES"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "cv",
+          "data_type": "varchar",
+          "column_type": "varchar(500) /*M!100301 COMPRESSED*/",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "YES"
+        },
+        {
+          "norm": "canonical_text",
+          "pk_seq": 0,
+          "name": "i6",
+          "data_type": "inet6",
+          "column_type": "inet6",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    },
+    {
+      "name": "t_num",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "decimal_text",
+          "pk_seq": 0,
+          "name": "d65",
+          "data_type": "decimal",
+          "column_type": "decimal(65,30)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "decimal_text",
+          "pk_seq": 0,
+          "name": "d10",
+          "data_type": "decimal",
+          "column_type": "decimal(10,0)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "decimal_text",
+          "pk_seq": 0,
+          "name": "d55",
+          "data_type": "decimal",
+          "column_type": "decimal(5,5)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "decimal_text",
+          "pk_seq": 0,
+          "name": "d102",
+          "data_type": "decimal",
+          "column_type": "decimal(10,2)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "decimal_text",
+          "pk_seq": 0,
+          "name": "d189",
+          "data_type": "decimal",
+          "column_type": "decimal(18,9)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "decimal_text",
+          "pk_seq": 0,
+          "name": "d42",
+          "data_type": "decimal",
+          "column_type": "decimal(4,2)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "float",
+          "pk_seq": 0,
+          "name": "f",
+          "data_type": "float",
+          "column_type": "float",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "float",
+          "pk_seq": 0,
+          "name": "d",
+          "data_type": "double",
+          "column_type": "double",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "bit_uint",
+          "pk_seq": 0,
+          "name": "b1",
+          "data_type": "bit",
+          "column_type": "bit(1)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "bit_uint",
+          "pk_seq": 0,
+          "name": "b10",
+          "data_type": "bit",
+          "column_type": "bit(10)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "bit_uint",
+          "pk_seq": 0,
+          "name": "b64",
+          "data_type": "bit",
+          "column_type": "bit(64)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    },
+    {
+      "name": "t_str",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "c_l",
+          "data_type": "char",
+          "column_type": "char(10)",
+          "charset": "latin1",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "v_l",
+          "data_type": "varchar",
+          "column_type": "varchar(20)",
+          "charset": "latin1",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "c_a",
+          "data_type": "char",
+          "column_type": "char(3)",
+          "charset": "ascii",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "c_u3",
+          "data_type": "char",
+          "column_type": "char(100)",
+          "charset": "utf8mb3",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "c_mb",
+          "data_type": "char",
+          "column_type": "char(255)",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "v_s",
+          "data_type": "varchar",
+          "column_type": "varchar(10)",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "text",
+          "pk_seq": 0,
+          "name": "v_mb",
+          "data_type": "varchar",
+          "column_type": "varchar(300)",
+          "charset": "utf8mb4",
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "hex",
+          "pk_seq": 0,
+          "name": "bn",
+          "data_type": "binary",
+          "column_type": "binary(8)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "hex",
+          "pk_seq": 0,
+          "name": "vb",
+          "data_type": "varbinary",
+          "column_type": "varbinary(300)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    },
+    {
+      "name": "t_time",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "d",
+          "data_type": "date",
+          "column_type": "date",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "dt0",
+          "data_type": "datetime",
+          "column_type": "datetime",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "dt1",
+          "data_type": "datetime",
+          "column_type": "datetime(1)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "dt2",
+          "data_type": "datetime",
+          "column_type": "datetime(2)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "dt3",
+          "data_type": "datetime",
+          "column_type": "datetime(3)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "dt4",
+          "data_type": "datetime",
+          "column_type": "datetime(4)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "dt5",
+          "data_type": "datetime",
+          "column_type": "datetime(5)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "dt6",
+          "data_type": "datetime",
+          "column_type": "datetime(6)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "unix_ts_text",
+          "pk_seq": 0,
+          "name": "ts0",
+          "data_type": "timestamp",
+          "column_type": "timestamp",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "unix_ts_text",
+          "pk_seq": 0,
+          "name": "ts1",
+          "data_type": "timestamp",
+          "column_type": "timestamp(1)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "unix_ts_text",
+          "pk_seq": 0,
+          "name": "ts2",
+          "data_type": "timestamp",
+          "column_type": "timestamp(2)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "unix_ts_text",
+          "pk_seq": 0,
+          "name": "ts3",
+          "data_type": "timestamp",
+          "column_type": "timestamp(3)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "unix_ts_text",
+          "pk_seq": 0,
+          "name": "ts4",
+          "data_type": "timestamp",
+          "column_type": "timestamp(4)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "unix_ts_text",
+          "pk_seq": 0,
+          "name": "ts5",
+          "data_type": "timestamp",
+          "column_type": "timestamp(5)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "unix_ts_text",
+          "pk_seq": 0,
+          "name": "ts6",
+          "data_type": "timestamp",
+          "column_type": "timestamp(6)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "tm0",
+          "data_type": "time",
+          "column_type": "time",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "tm1",
+          "data_type": "time",
+          "column_type": "time(1)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "tm2",
+          "data_type": "time",
+          "column_type": "time(2)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "tm3",
+          "data_type": "time",
+          "column_type": "time(3)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "tm4",
+          "data_type": "time",
+          "column_type": "time(4)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "tm5",
+          "data_type": "time",
+          "column_type": "time(5)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "temporal_text",
+          "pk_seq": 0,
+          "name": "tm6",
+          "data_type": "time",
+          "column_type": "time(6)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "year_int",
+          "pk_seq": 0,
+          "name": "y",
+          "data_type": "year",
+          "column_type": "year(4)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    },
+    {
+      "name": "t_uuid",
+      "primary_key": [
+        "id"
+      ],
+      "columns": [
+        {
+          "norm": "int",
+          "pk_seq": 1,
+          "name": "id",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "NO",
+          "compressed": "NO"
+        },
+        {
+          "norm": "int",
+          "pk_seq": 0,
+          "name": "n",
+          "data_type": "int",
+          "column_type": "int(11)",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        },
+        {
+          "norm": "canonical_text",
+          "pk_seq": 0,
+          "name": "u",
+          "data_type": "uuid",
+          "column_type": "uuid",
+          "charset": null,
+          "nullable": "YES",
+          "compressed": "NO"
+        }
+      ]
+    }
+  ],
+  "transactions": [
+    {
+      "seq": 1,
+      "name": "create_tables",
+      "kind": "ddl",
+      "gtid_after": "0-1-11",
+      "tables": []
+    },
+    {
+      "seq": 2,
+      "name": "create_mariadb_types",
+      "kind": "ddl",
+      "gtid_after": "0-1-12",
+      "tables": []
+    },
+    {
+      "seq": 3,
+      "name": "create_uuid",
+      "kind": "ddl",
+      "gtid_after": "0-1-13",
+      "tables": []
+    },
+    {
+      "seq": 4,
+      "name": "create_inet4",
+      "kind": "ddl",
+      "gtid_after": "0-1-14",
+      "tables": []
+    },
+    {
+      "seq": 5,
+      "name": "ins_int",
+      "kind": "txn",
+      "gtid_after": "0-1-15",
+      "tables": [
+        "t_int"
+      ]
+    },
+    {
+      "seq": 6,
+      "name": "ins_num",
+      "kind": "txn",
+      "gtid_after": "0-1-16",
+      "tables": [
+        "t_num"
+      ]
+    },
+    {
+      "seq": 7,
+      "name": "ins_time",
+      "kind": "txn",
+      "gtid_after": "0-1-17",
+      "tables": [
+        "t_time"
+      ]
+    },
+    {
+      "seq": 8,
+      "name": "ins_str",
+      "kind": "txn",
+      "gtid_after": "0-1-18",
+      "tables": [
+        "t_str"
+      ]
+    },
+    {
+      "seq": 9,
+      "name": "ins_lob",
+      "kind": "txn",
+      "gtid_after": "0-1-19",
+      "tables": [
+        "t_lob"
+      ]
+    },
+    {
+      "seq": 10,
+      "name": "ins_enum",
+      "kind": "txn",
+      "gtid_after": "0-1-20",
+      "tables": [
+        "t_enum"
+      ]
+    },
+    {
+      "seq": 11,
+      "name": "ins_json",
+      "kind": "txn",
+      "gtid_after": "0-1-21",
+      "tables": [
+        "t_json"
+      ]
+    },
+    {
+      "seq": 12,
+      "name": "ins_big",
+      "kind": "txn",
+      "gtid_after": "0-1-22",
+      "tables": [
+        "t_big"
+      ]
+    },
+    {
+      "seq": 13,
+      "name": "ins_geo",
+      "kind": "txn",
+      "gtid_after": "0-1-23",
+      "tables": [
+        "t_geo"
+      ]
+    },
+    {
+      "seq": 14,
+      "name": "ins_mariadb_types",
+      "kind": "txn",
+      "gtid_after": "0-1-24",
+      "tables": [
+        "t_mdb"
+      ]
+    },
+    {
+      "seq": 15,
+      "name": "upd_mariadb_types",
+      "kind": "txn",
+      "gtid_after": "0-1-25",
+      "tables": [
+        "t_mdb"
+      ]
+    },
+    {
+      "seq": 16,
+      "name": "ins_uuid",
+      "kind": "txn",
+      "gtid_after": "0-1-26",
+      "tables": [
+        "t_uuid"
+      ]
+    },
+    {
+      "seq": 17,
+      "name": "ins_inet4",
+      "kind": "txn",
+      "gtid_after": "0-1-27",
+      "tables": [
+        "t_inet4"
+      ]
+    },
+    {
+      "seq": 18,
+      "name": "bulk_insert",
+      "kind": "txn",
+      "gtid_after": "0-1-28",
+      "tables": [
+        "t_bulk"
+      ]
+    },
+    {
+      "seq": 19,
+      "name": "bulk_update",
+      "kind": "txn",
+      "gtid_after": "0-1-29",
+      "tables": [
+        "t_bulk"
+      ]
+    },
+    {
+      "seq": 20,
+      "name": "bulk_delete",
+      "kind": "txn",
+      "gtid_after": "0-1-30",
+      "tables": [
+        "t_bulk"
+      ]
+    },
+    {
+      "seq": 21,
+      "name": "upd_int_partial_columns",
+      "kind": "txn",
+      "gtid_after": "0-1-31",
+      "tables": [
+        "t_int"
+      ]
+    },
+    {
+      "seq": 22,
+      "name": "upd_int_pk_change",
+      "kind": "txn",
+      "gtid_after": "0-1-32",
+      "tables": [
+        "t_int"
+      ]
+    },
+    {
+      "seq": 23,
+      "name": "upd_null_to_value",
+      "kind": "txn",
+      "gtid_after": "0-1-33",
+      "tables": [
+        "t_int",
+        "t_lob",
+        "t_str",
+        "t_time"
+      ]
+    },
+    {
+      "seq": 24,
+      "name": "upd_value_to_null",
+      "kind": "txn",
+      "gtid_after": "0-1-34",
+      "tables": [
+        "t_enum",
+        "t_num",
+        "t_str",
+        "t_time"
+      ]
+    },
+    {
+      "seq": 25,
+      "name": "upd_lob_blob_only",
+      "kind": "txn",
+      "gtid_after": "0-1-35",
+      "tables": [
+        "t_lob"
+      ]
+    },
+    {
+      "seq": 26,
+      "name": "upd_lob_nonblob_only",
+      "kind": "txn",
+      "gtid_after": "0-1-36",
+      "tables": [
+        "t_lob"
+      ]
+    },
+    {
+      "seq": 27,
+      "name": "upd_big_nonblob_only",
+      "kind": "txn",
+      "gtid_after": "0-1-37",
+      "tables": [
+        "t_big"
+      ]
+    },
+    {
+      "seq": 28,
+      "name": "upd_time_values",
+      "kind": "txn",
+      "gtid_after": "0-1-38",
+      "tables": [
+        "t_time"
+      ]
+    },
+    {
+      "seq": 29,
+      "name": "upd_enum_values",
+      "kind": "txn",
+      "gtid_after": "0-1-39",
+      "tables": [
+        "t_enum"
+      ]
+    },
+    {
+      "seq": 30,
+      "name": "upd_geo",
+      "kind": "txn",
+      "gtid_after": "0-1-40",
+      "tables": [
+        "t_geo"
+      ]
+    },
+    {
+      "seq": 31,
+      "name": "upd_json_set_replace",
+      "kind": "txn",
+      "gtid_after": "0-1-41",
+      "tables": [
+        "t_json"
+      ]
+    },
+    {
+      "seq": 32,
+      "name": "upd_json_remove",
+      "kind": "txn",
+      "gtid_after": "0-1-42",
+      "tables": [
+        "t_json"
+      ]
+    },
+    {
+      "seq": 33,
+      "name": "upd_json_set_new_path_and_column",
+      "kind": "txn",
+      "gtid_after": "0-1-43",
+      "tables": [
+        "t_json"
+      ]
+    },
+    {
+      "seq": 34,
+      "name": "upd_json_full_and_null",
+      "kind": "txn",
+      "gtid_after": "0-1-44",
+      "tables": [
+        "t_json"
+      ]
+    },
+    {
+      "seq": 35,
+      "name": "upd_json_nonjson_only",
+      "kind": "txn",
+      "gtid_after": "0-1-45",
+      "tables": [
+        "t_json"
+      ]
+    },
+    {
+      "seq": 36,
+      "name": "upd_big_json_partial",
+      "kind": "txn",
+      "gtid_after": "0-1-46",
+      "tables": [
+        "t_big"
+      ]
+    },
+    {
+      "seq": 37,
+      "name": "multi_table",
+      "kind": "txn",
+      "gtid_after": "0-1-47",
+      "tables": [
+        "t_int",
+        "t_json",
+        "t_num",
+        "t_str"
+      ]
+    },
+    {
+      "seq": 38,
+      "name": "deletes",
+      "kind": "txn",
+      "gtid_after": "0-1-48",
+      "tables": [
+        "t_enum",
+        "t_geo",
+        "t_json",
+        "t_lob",
+        "t_str",
+        "t_time"
+      ]
+    },
+    {
+      "seq": 39,
+      "name": "delete_big",
+      "kind": "txn",
+      "gtid_after": "0-1-49",
+      "tables": [
+        "t_big"
+      ]
+    }
+  ],
+  "skipped": [
+    {
+      "name": "create_vector",
+      "kind": "ddl",
+      "reason": "min-version 11.7"
+    },
+    {
+      "name": "ins_vector",
+      "kind": "txn",
+      "reason": "min-version 11.7"
+    },
+    {
+      "name": "upd_vector",
+      "kind": "txn",
+      "reason": "min-version 11.7"
+    },
+    {
+      "name": "ts_beyond_2038",
+      "kind": "txn",
+      "reason": "min-version 11.5"
+    }
+  ]
+}

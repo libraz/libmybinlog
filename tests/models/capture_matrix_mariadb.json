@@ -1,0 +1,375 @@
+{
+  "description": "Server configurations captured by tests/fixtures/matrix/capture_matrix.sh for mariadb. log_bin_compress=ON is started with log_bin_compress_min_len=10. Each config's output dir is tests/fixtures/matrix/mariadb-<version>/<name>/.",
+  "generator": {
+    "tool": "coverwise pairwise_generate",
+    "strength": 2,
+    "seed": 1,
+    "seeds": "one row per version with CRC32, FULL image, FULL metadata, log_bin_compress OFF (the configuration the products require)"
+  },
+  "model": {
+    "version": [
+      "10.11",
+      "11.4",
+      "11.8",
+      "12.3",
+      "13.0"
+    ],
+    "binlog_checksum": [
+      "NONE",
+      "CRC32"
+    ],
+    "binlog_row_image": [
+      "FULL",
+      "MINIMAL",
+      "NOBLOB"
+    ],
+    "binlog_row_metadata": [
+      "MINIMAL",
+      "FULL"
+    ],
+    "log_bin_compress": [
+      "OFF",
+      "ON"
+    ]
+  },
+  "constraints": [],
+  "columns": [
+    "version",
+    "binlog_checksum",
+    "binlog_row_image",
+    "binlog_row_metadata",
+    "log_bin_compress"
+  ],
+  "rows": [
+    [
+      "10.11",
+      "CRC32",
+      "FULL",
+      "FULL",
+      "OFF"
+    ],
+    [
+      "11.4",
+      "CRC32",
+      "FULL",
+      "FULL",
+      "OFF"
+    ],
+    [
+      "11.8",
+      "CRC32",
+      "FULL",
+      "FULL",
+      "OFF"
+    ],
+    [
+      "12.3",
+      "CRC32",
+      "FULL",
+      "FULL",
+      "OFF"
+    ],
+    [
+      "13.0",
+      "CRC32",
+      "FULL",
+      "FULL",
+      "OFF"
+    ],
+    [
+      "12.3",
+      "NONE",
+      "FULL",
+      "MINIMAL",
+      "ON"
+    ],
+    [
+      "11.8",
+      "CRC32",
+      "FULL",
+      "MINIMAL",
+      "OFF"
+    ],
+    [
+      "12.3",
+      "CRC32",
+      "NOBLOB",
+      "FULL",
+      "ON"
+    ],
+    [
+      "10.11",
+      "NONE",
+      "FULL",
+      "MINIMAL",
+      "OFF"
+    ],
+    [
+      "11.8",
+      "NONE",
+      "MINIMAL",
+      "FULL",
+      "ON"
+    ],
+    [
+      "12.3",
+      "CRC32",
+      "MINIMAL",
+      "MINIMAL",
+      "OFF"
+    ],
+    [
+      "13.0",
+      "NONE",
+      "NOBLOB",
+      "MINIMAL",
+      "ON"
+    ],
+    [
+      "10.11",
+      "CRC32",
+      "NOBLOB",
+      "FULL",
+      "ON"
+    ],
+    [
+      "11.4",
+      "NONE",
+      "MINIMAL",
+      "FULL",
+      "ON"
+    ],
+    [
+      "11.4",
+      "NONE",
+      "NOBLOB",
+      "MINIMAL",
+      "OFF"
+    ],
+    [
+      "13.0",
+      "NONE",
+      "MINIMAL",
+      "MINIMAL",
+      "OFF"
+    ],
+    [
+      "11.8",
+      "CRC32",
+      "NOBLOB",
+      "FULL",
+      "OFF"
+    ],
+    [
+      "10.11",
+      "CRC32",
+      "MINIMAL",
+      "FULL",
+      "OFF"
+    ]
+  ],
+  "coverage": {
+    "tuples": 75,
+    "covered": 75
+  },
+  "configs": [
+    {
+      "name": "crc32_full_metafull_nozlib",
+      "version": "10.11",
+      "image": "mariadb:10.11",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "FULL",
+        "log_bin_compress": "OFF"
+      }
+    },
+    {
+      "name": "crc32_full_metafull_nozlib",
+      "version": "11.4",
+      "image": "mariadb:11.4",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "FULL",
+        "log_bin_compress": "OFF"
+      }
+    },
+    {
+      "name": "crc32_full_metafull_nozlib",
+      "version": "11.8",
+      "image": "mariadb:11.8",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "FULL",
+        "log_bin_compress": "OFF"
+      }
+    },
+    {
+      "name": "crc32_full_metafull_nozlib",
+      "version": "12.3",
+      "image": "mariadb:12.3",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "FULL",
+        "log_bin_compress": "OFF"
+      }
+    },
+    {
+      "name": "crc32_full_metafull_nozlib",
+      "version": "13.0",
+      "image": "mariadb:13.0",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "FULL",
+        "log_bin_compress": "OFF"
+      }
+    },
+    {
+      "name": "none_full_metaminimal_zlib",
+      "version": "12.3",
+      "image": "mariadb:12.3",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "MINIMAL",
+        "log_bin_compress": "ON"
+      }
+    },
+    {
+      "name": "crc32_full_metaminimal_nozlib",
+      "version": "11.8",
+      "image": "mariadb:11.8",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "MINIMAL",
+        "log_bin_compress": "OFF"
+      }
+    },
+    {
+      "name": "crc32_noblob_metafull_zlib",
+      "version": "12.3",
+      "image": "mariadb:12.3",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "NOBLOB",
+        "binlog_row_metadata": "FULL",
+        "log_bin_compress": "ON"
+      }
+    },
+    {
+      "name": "none_full_metaminimal_nozlib",
+      "version": "10.11",
+      "image": "mariadb:10.11",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "MINIMAL",
+        "log_bin_compress": "OFF"
+      }
+    },
+    {
+      "name": "none_minimal_metafull_zlib",
+      "version": "11.8",
+      "image": "mariadb:11.8",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "MINIMAL",
+        "binlog_row_metadata": "FULL",
+        "log_bin_compress": "ON"
+      }
+    },
+    {
+      "name": "crc32_minimal_metaminimal_nozlib",
+      "version": "12.3",
+      "image": "mariadb:12.3",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "MINIMAL",
+        "binlog_row_metadata": "MINIMAL",
+        "log_bin_compress": "OFF"
+      }
+    },
+    {
+      "name": "none_noblob_metaminimal_zlib",
+      "version": "13.0",
+      "image": "mariadb:13.0",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "NOBLOB",
+        "binlog_row_metadata": "MINIMAL",
+        "log_bin_compress": "ON"
+      }
+    },
+    {
+      "name": "crc32_noblob_metafull_zlib",
+      "version": "10.11",
+      "image": "mariadb:10.11",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "NOBLOB",
+        "binlog_row_metadata": "FULL",
+        "log_bin_compress": "ON"
+      }
+    },
+    {
+      "name": "none_minimal_metafull_zlib",
+      "version": "11.4",
+      "image": "mariadb:11.4",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "MINIMAL",
+        "binlog_row_metadata": "FULL",
+        "log_bin_compress": "ON"
+      }
+    },
+    {
+      "name": "none_noblob_metaminimal_nozlib",
+      "version": "11.4",
+      "image": "mariadb:11.4",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "NOBLOB",
+        "binlog_row_metadata": "MINIMAL",
+        "log_bin_compress": "OFF"
+      }
+    },
+    {
+      "name": "none_minimal_metaminimal_nozlib",
+      "version": "13.0",
+      "image": "mariadb:13.0",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "MINIMAL",
+        "binlog_row_metadata": "MINIMAL",
+        "log_bin_compress": "OFF"
+      }
+    },
+    {
+      "name": "crc32_noblob_metafull_nozlib",
+      "version": "11.8",
+      "image": "mariadb:11.8",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "NOBLOB",
+        "binlog_row_metadata": "FULL",
+        "log_bin_compress": "OFF"
+      }
+    },
+    {
+      "name": "crc32_minimal_metafull_nozlib",
+      "version": "10.11",
+      "image": "mariadb:10.11",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "MINIMAL",
+        "binlog_row_metadata": "FULL",
+        "log_bin_compress": "OFF"
+      }
+    }
+  ]
+}

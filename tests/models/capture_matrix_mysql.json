@@ -1,0 +1,273 @@
+{
+  "description": "Server configurations captured by tests/fixtures/matrix/capture_matrix.sh for mysql. EMPTY in binlog_row_value_options means the server default ''. Each config's output dir is tests/fixtures/matrix/mysql-<version>/<name>/.",
+  "generator": {
+    "tool": "coverwise pairwise_generate",
+    "strength": 2,
+    "seed": 1,
+    "seeds": "one row per version with CRC32, FULL image, FULL metadata, no compression, no PARTIAL_JSON (the configuration the products require)"
+  },
+  "model": {
+    "version": [
+      "8.4",
+      "9.7"
+    ],
+    "binlog_checksum": [
+      "NONE",
+      "CRC32"
+    ],
+    "binlog_row_image": [
+      "FULL",
+      "MINIMAL",
+      "NOBLOB"
+    ],
+    "binlog_row_metadata": [
+      "MINIMAL",
+      "FULL"
+    ],
+    "binlog_transaction_compression": [
+      "OFF",
+      "ON"
+    ],
+    "binlog_row_value_options": [
+      "EMPTY",
+      "PARTIAL_JSON"
+    ]
+  },
+  "constraints": [],
+  "columns": [
+    "version",
+    "binlog_checksum",
+    "binlog_row_image",
+    "binlog_row_metadata",
+    "binlog_transaction_compression",
+    "binlog_row_value_options"
+  ],
+  "rows": [
+    [
+      "8.4",
+      "CRC32",
+      "FULL",
+      "FULL",
+      "OFF",
+      "EMPTY"
+    ],
+    [
+      "9.7",
+      "CRC32",
+      "FULL",
+      "FULL",
+      "OFF",
+      "EMPTY"
+    ],
+    [
+      "8.4",
+      "NONE",
+      "NOBLOB",
+      "MINIMAL",
+      "OFF",
+      "PARTIAL_JSON"
+    ],
+    [
+      "9.7",
+      "CRC32",
+      "MINIMAL",
+      "MINIMAL",
+      "OFF",
+      "PARTIAL_JSON"
+    ],
+    [
+      "9.7",
+      "NONE",
+      "NOBLOB",
+      "FULL",
+      "ON",
+      "EMPTY"
+    ],
+    [
+      "8.4",
+      "NONE",
+      "MINIMAL",
+      "MINIMAL",
+      "ON",
+      "EMPTY"
+    ],
+    [
+      "8.4",
+      "NONE",
+      "FULL",
+      "FULL",
+      "OFF",
+      "PARTIAL_JSON"
+    ],
+    [
+      "8.4",
+      "NONE",
+      "FULL",
+      "MINIMAL",
+      "OFF",
+      "EMPTY"
+    ],
+    [
+      "9.7",
+      "CRC32",
+      "NOBLOB",
+      "MINIMAL",
+      "ON",
+      "PARTIAL_JSON"
+    ],
+    [
+      "9.7",
+      "NONE",
+      "FULL",
+      "MINIMAL",
+      "ON",
+      "EMPTY"
+    ],
+    [
+      "8.4",
+      "NONE",
+      "MINIMAL",
+      "FULL",
+      "ON",
+      "PARTIAL_JSON"
+    ]
+  ],
+  "coverage": {
+    "tuples": 70,
+    "covered": 70
+  },
+  "configs": [
+    {
+      "name": "crc32_full_metafull_nozstd_nopjson",
+      "version": "8.4",
+      "image": "mysql:8.4",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "FULL",
+        "binlog_transaction_compression": "OFF",
+        "binlog_row_value_options": "EMPTY"
+      }
+    },
+    {
+      "name": "crc32_full_metafull_nozstd_nopjson",
+      "version": "9.7",
+      "image": "mysql:9.7",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "FULL",
+        "binlog_transaction_compression": "OFF",
+        "binlog_row_value_options": "EMPTY"
+      }
+    },
+    {
+      "name": "none_noblob_metaminimal_nozstd_pjson",
+      "version": "8.4",
+      "image": "mysql:8.4",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "NOBLOB",
+        "binlog_row_metadata": "MINIMAL",
+        "binlog_transaction_compression": "OFF",
+        "binlog_row_value_options": "PARTIAL_JSON"
+      }
+    },
+    {
+      "name": "crc32_minimal_metaminimal_nozstd_pjson",
+      "version": "9.7",
+      "image": "mysql:9.7",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "MINIMAL",
+        "binlog_row_metadata": "MINIMAL",
+        "binlog_transaction_compression": "OFF",
+        "binlog_row_value_options": "PARTIAL_JSON"
+      }
+    },
+    {
+      "name": "none_noblob_metafull_zstd_nopjson",
+      "version": "9.7",
+      "image": "mysql:9.7",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "NOBLOB",
+        "binlog_row_metadata": "FULL",
+        "binlog_transaction_compression": "ON",
+        "binlog_row_value_options": "EMPTY"
+      }
+    },
+    {
+      "name": "none_minimal_metaminimal_zstd_nopjson",
+      "version": "8.4",
+      "image": "mysql:8.4",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "MINIMAL",
+        "binlog_row_metadata": "MINIMAL",
+        "binlog_transaction_compression": "ON",
+        "binlog_row_value_options": "EMPTY"
+      }
+    },
+    {
+      "name": "none_full_metafull_nozstd_pjson",
+      "version": "8.4",
+      "image": "mysql:8.4",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "FULL",
+        "binlog_transaction_compression": "OFF",
+        "binlog_row_value_options": "PARTIAL_JSON"
+      }
+    },
+    {
+      "name": "none_full_metaminimal_nozstd_nopjson",
+      "version": "8.4",
+      "image": "mysql:8.4",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "MINIMAL",
+        "binlog_transaction_compression": "OFF",
+        "binlog_row_value_options": "EMPTY"
+      }
+    },
+    {
+      "name": "crc32_noblob_metaminimal_zstd_pjson",
+      "version": "9.7",
+      "image": "mysql:9.7",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "NOBLOB",
+        "binlog_row_metadata": "MINIMAL",
+        "binlog_transaction_compression": "ON",
+        "binlog_row_value_options": "PARTIAL_JSON"
+      }
+    },
+    {
+      "name": "none_full_metaminimal_zstd_nopjson",
+      "version": "9.7",
+      "image": "mysql:9.7",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "MINIMAL",
+        "binlog_transaction_compression": "ON",
+        "binlog_row_value_options": "EMPTY"
+      }
+    },
+    {
+      "name": "none_minimal_metafull_zstd_pjson",
+      "version": "8.4",
+      "image": "mysql:8.4",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "MINIMAL",
+        "binlog_row_metadata": "FULL",
+        "binlog_transaction_compression": "ON",
+        "binlog_row_value_options": "PARTIAL_JSON"
+      }
+    }
+  ]
+}
