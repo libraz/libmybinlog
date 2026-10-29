@@ -172,6 +172,34 @@ struct RowsEvent {
                                                   size_t size, const TableMap& table,
                                                   const DecodeOptions& options, RowsEvent* out);
 
+/** @brief STMT_END_F in a rows event's flags: the last rows event of its statement. */
+inline constexpr uint16_t kRowsStatementEndFlag = 0x0001;
+
+/** @brief Table id MySQL writes on a rows event that names no table (all 48 bits set). */
+inline constexpr uint64_t kDummyTableId = 0xFFFFFFFFFFFFULL;
+
+/** @brief The fixed fields a rows event starts with. */
+struct RowsEventHeader {
+  uint64_t table_id = 0;  ///< 48-bit table id of the TABLE_MAP the event refers to.
+  uint16_t flags = 0;     ///< Rows-event flags; see kRowsStatementEndFlag.
+};
+
+/**
+ * @brief Read the table id and flags of a rows event.
+ *
+ * The table id selects the TABLE_MAP that DecodeRowsEvent() needs.
+ *
+ * @param header Header of the event; its type code must satisfy IsRowsEvent().
+ * @param body Bytes after the common header.
+ * @param size Body length, checksum trailer excluded.
+ * @param[out] out Filled on kOk; untouched otherwise.
+ * @return kOk; kUnsupported when the type code is not a rows event; kTruncated
+ *   when @p body is null or shorter than the 8-byte post-header. Reentrant.
+ */
+[[nodiscard]] MYBINLOG_API Status ParseRowsEventHeader(const EventHeader& header,
+                                                       const uint8_t* body, size_t size,
+                                                       RowsEventHeader* out);
+
 }  // namespace mybinlog
 
 #endif  // MYBINLOG_ROW_DECODER_H_

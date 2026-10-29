@@ -34,7 +34,7 @@ const char* DispositionName(Disposition disposition) noexcept {
     case Disposition::kFailClosed:
       return "kFailClosed";
   }
-  return "kFailClosed";
+  return "kUnknown";
 }
 
 EventDisposition ClassifyEvent(EventType type, ServerFlavor flavor) noexcept {

@@ -22,9 +22,6 @@
 namespace mybinlog {
 namespace {
 
-// Rows-event post-header: 6-byte table id, then 2-byte flags.
-constexpr size_t kRowsPostHeaderSize = 8;
-
 // Parse one body with a low-level parser and store it as the event's variant alternative.
 template <typename T, typename Parser>
 Status ParseInto(Parser parser, const EventHeader& header, const uint8_t* body, size_t size,
@@ -276,12 +273,13 @@ Status Decoder::DecodePlain(const EventHeader& header, const uint8_t* body, size
 
 Status Decoder::DecodeRows(const EventHeader& header, const uint8_t* body, size_t size,
                            uint64_t offset, Event* out) {
-  if (body == nullptr || size < kRowsPostHeaderSize) {
+  RowsEventHeader fixed;
+  if (ParseRowsEventHeader(header, body, size, &fixed) != Status::kOk) {
     return Fail(Status::kTruncated, offset, &header, "body ends inside the post-header");
   }
   TableRowsEvent rows;
-  rows.table_id = ReadU48Le(body);
-  rows.flags = ReadU16Le(body + 6);
+  rows.table_id = fixed.table_id;
+  rows.flags = fixed.flags;
   rows.body = body;
   rows.size = size;
   const auto table = tables_.find(rows.table_id);

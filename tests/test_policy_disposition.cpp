@@ -140,6 +140,7 @@ TEST(CodecPolicy, DispositionNames) {
   EXPECT_STREQ(DispositionName(D::kCompressed), "kCompressed");
   EXPECT_STREQ(DispositionName(D::kDataNeutral), "kDataNeutral");
   EXPECT_STREQ(DispositionName(D::kFailClosed), "kFailClosed");
+  EXPECT_STREQ(DispositionName(static_cast<D>(200)), "kUnknown");
 }
 
 }  // namespace

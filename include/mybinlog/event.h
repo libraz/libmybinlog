@@ -35,12 +35,6 @@
 
 namespace mybinlog {
 
-/** @brief STMT_END_F in a rows event's flags: the last rows event of its statement. */
-inline constexpr uint16_t kRowsStatementEndFlag = 0x0001;
-
-/** @brief Table id MySQL writes on a rows event that names no table (all 48 bits set). */
-inline constexpr uint64_t kDummyTableId = 0xFFFFFFFFFFFFULL;
-
 /** @brief Body of an event type without a parsed form here. */
 struct UnknownEvent {
   /** Body bytes after the common header, trailer excluded; owned by the Decoder. */

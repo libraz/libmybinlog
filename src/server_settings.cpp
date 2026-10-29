@@ -79,7 +79,7 @@ const char* RuleIdName(RuleId id) noexcept {
     case RuleId::kLogReplicaUpdates:
       return "kLogReplicaUpdates";
   }
-  return "";
+  return "kUnknown";
 }
 
 size_t EvaluateServerSettings(VariableLookupFn lookup, void* ctx, ServerFlavor flavor,

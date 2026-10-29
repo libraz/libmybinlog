@@ -4,7 +4,7 @@
  *
  * The rules cover only values that can be read once from `SHOW VARIABLES`.
  * Dynamic checks (purged GTIDs, failover, purge boundaries) and the query
- * transport stay with the product: it supplies a lookup function and chooses
+ * transport stay with the caller: it supplies a lookup function and chooses
  * which rule ids apply to it.
  */
 
@@ -78,7 +78,7 @@ extern MYBINLOG_API const std::array<ServerSettingRule, kRuleCount> kServerSetti
 /**
  * @brief Stable identifier of a rule, for logs and messages.
  * @param id Any value, including one outside the enumerators.
- * @return Static string such as "kLogBin" ("" outside the enumerators); never
+ * @return Static string such as "kLogBin" ("kUnknown" outside the enumerators); never
  *   null. Reentrant.
  */
 [[nodiscard]] MYBINLOG_API const char* RuleIdName(RuleId id) noexcept;

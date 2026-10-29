@@ -562,4 +562,14 @@ Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t si
   return Status::kOk;
 }
 
+Status ParseRowsEventHeader(const EventHeader& header, const uint8_t* body, size_t size,
+                            RowsEventHeader* out) {
+  if (!IsRowsEvent(header.type_code)) return Status::kUnsupported;
+  // Post-header: 6-byte table id, then 2-byte flags.
+  if (body == nullptr || size < 8) return Status::kTruncated;
+  out->table_id = ReadU48Le(body);
+  out->flags = ReadU16Le(body + 6);
+  return Status::kOk;
+}
+
 }  // namespace mybinlog

@@ -83,6 +83,39 @@ Status Decode(EventType type, const Writer& w, const TableMap& table, RowsEvent*
   return DecodeRowsEvent(Header(type), body.data(), body.size(), table, options, out);
 }
 
+// --- Post-header ---
+
+TEST(CodecRowsEvent, ParseRowsEventHeaderReadsTableIdAndFlags) {
+  Writer w;
+  w.Le(0x0000A1B2C3D4E5F6ULL, 6).Le(kRowsStatementEndFlag, 2).Le(2, 2);
+  RowsEventHeader fixed;
+  ASSERT_EQ(ParseRowsEventHeader(Header(EventType::kUpdateRowsEvent), w.bytes.data(),
+                                 w.bytes.size(), &fixed),
+            Status::kOk);
+  EXPECT_EQ(fixed.table_id, 0xA1B2C3D4E5F6ULL);
+  EXPECT_EQ(fixed.flags, kRowsStatementEndFlag);
+
+  Writer dummy;
+  dummy.Le(kDummyTableId, 6).Le(0, 2);
+  ASSERT_EQ(ParseRowsEventHeader(Header(EventType::kWriteRowsEventV1), dummy.bytes.data(),
+                                 dummy.bytes.size(), &fixed),
+            Status::kOk);
+  EXPECT_EQ(fixed.table_id, kDummyTableId);
+}
+
+TEST(CodecRowsEvent, ParseRowsEventHeaderRejectsShortBodiesAndOtherTypes) {
+  const Bytes body(8, 0);
+  RowsEventHeader fixed;
+  fixed.table_id = 7;
+  EXPECT_EQ(ParseRowsEventHeader(Header(EventType::kWriteRowsEvent), body.data(), 7, &fixed),
+            Status::kTruncated);
+  EXPECT_EQ(ParseRowsEventHeader(Header(EventType::kWriteRowsEvent), nullptr, 0, &fixed),
+            Status::kTruncated);
+  EXPECT_EQ(ParseRowsEventHeader(Header(EventType::kQueryEvent), body.data(), body.size(), &fixed),
+            Status::kUnsupported);
+  EXPECT_EQ(fixed.table_id, 7u);
+}
+
 // --- Shapes ---
 
 TEST(CodecRowsEvent, WriteRowsIntAndVarchar) {

@@ -28,9 +28,9 @@ namespace mybinlog {
  * - kInt, kUInt: decimal digits with a leading '-' when negative.
  * - kDouble: `my_gcvt` form, as the server prints it. DOUBLE uses the shortest
  *   digits that round-trip; FLOAT (Value::type kFloat) keeps 6 significant
- *   digits, so 16777216 prints "16777200". Exponent form is used outside
- *   decimal exponents -14..15 (`1e15`, `1.5e-20`), with no '+' and no leading
- *   zeros; negative zero prints "-0"; NaN and infinities, which no server
+ *   digits, so 16777216 prints "16777200". Exponent form is used when the
+ *   value is at least 1e15 or below 1e-15 (`1e15`, `1.5e-20`), with no '+'
+ *   and no leading zeros; negative zero prints "-0"; NaN and infinities, which no server
  *   stores, print "nan", "inf" and "-inf".
  * - kDecimal: Value::bytes verbatim (exactly `scale` fraction digits).
  * - kDate: `YYYY-MM-DD`; kDateTime: `YYYY-MM-DD hh:mm:ss` plus `.` and `fsp`

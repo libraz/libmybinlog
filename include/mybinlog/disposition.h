@@ -43,7 +43,8 @@ struct EventDisposition {
 /**
  * @brief Stable identifier of a disposition, for logs and messages.
  * @param disposition Any value, including one outside the enumerators.
- * @return Static string such as "kFailClosed"; never null. Reentrant.
+ * @return Static string such as "kFailClosed" ("kUnknown" outside the
+ *   enumerators); never null. Reentrant.
  */
 [[nodiscard]] MYBINLOG_API const char* DispositionName(Disposition disposition) noexcept;
 

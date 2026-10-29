@@ -56,6 +56,7 @@ TEST(CodecPolicy, RuleIds) {
               kServerSettingRules[i].mariadb_variable != nullptr);
   }
   EXPECT_STREQ(RuleIdName(RuleId::kLogReplicaUpdates), "kLogReplicaUpdates");
+  EXPECT_STREQ(RuleIdName(static_cast<RuleId>(200)), "kUnknown");
 }
 
 TEST(CodecPolicy, RuleVariablesAndFlavors) {
