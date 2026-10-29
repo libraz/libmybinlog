@@ -22,7 +22,7 @@ This page maps the public headers. The declarations and their Doxygen comments i
 | `crc32.h` | `ComputeCrc32()`, `UpdateCrc32()` | [Checksums](checksums.md) |
 | `format_description.h` | `FormatDescriptionEvent`, `ParseFormatDescriptionEvent()` | [Checksums](checksums.md) |
 | `table_map.h` | `TableMap`, `TableMapColumn`, `ParseTableMapEvent()`, `RealType()` | [Rows](rows.md) |
-| `row_decoder.h` | `RowsEvent`, `Row`, `DecodeOptions`, `DecodeBudget`, `DecodeRowsEvent()`, `RowsEventHeader`, `ParseRowsEventHeader()`, `kRowsStatementEndFlag`, `kDummyTableId` | [Rows](rows.md) |
+| `row_decoder.h` | `RowsEvent`, `Row`, `DecodeOptions`, `DecodeBudget`, `DecodeRowsEvent()`, `RowScratch`, `RowVisitorFn`, `VisitRowsEvent()`, `RowsEventHeader`, `ParseRowsEventHeader()`, `kRowsStatementEndFlag`, `kDummyTableId` | [Rows](rows.md) |
 | `value.h` | `Value`, `Temporal`, `ValueKindName()` | [Values](values.md) |
 | `format.h` | `FormatValue()`, `FormatEnumLabel()`, `FormatSetLabels()` | [Values](values.md) |
 | `json.h` | `JsonValue`, `ParseJsonBinary()`, `JsonToText()`, `JsonBinaryToText()`, `FindJsonMember()` | [JSON](json.md) |

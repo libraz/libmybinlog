@@ -1,7 +1,5 @@
 #include "mybinlog/disposition.h"
 
-#include <cstring>
-
 namespace mybinlog {
 namespace {
 
@@ -10,6 +8,8 @@ constexpr EventDisposition Neutral(const char* r) { return {Disposition::kDataNe
 constexpr EventDisposition Closed(const char* r) { return {Disposition::kFailClosed, r}; }
 
 constexpr const char* kForeignFlavor = "event type is not written by this server flavor";
+// Reached only past the end of the switch, i.e. for a code outside EventType.
+constexpr const char* kOutsideEnumeration = "event type outside the enumeration";
 
 }  // namespace
 
@@ -146,18 +146,17 @@ EventDisposition ClassifyEvent(EventType type, ServerFlavor flavor) noexcept {
     case EventType::kMariaDBPartialRowDataEvent:
       return Closed("partial row data is not decoded");
   }
-  return Closed("event type outside the enumeration");
+  return Closed(kOutsideEnumeration);
 }
 
 EventDisposition ClassifyEvent(uint8_t type_code, uint16_t flags, ServerFlavor flavor) noexcept {
   // Code 0 is a real enumerator; every other unnamed code is outside EventType.
-  if (std::strcmp(EventTypeName(type_code), "UNKNOWN") == 0) {
-    if ((flags & kLogEventIgnorableFlag) != 0) {
-      return Neutral("unrecognized type marked ignorable by the source");
-    }
-    return Closed("unrecognized type not marked ignorable");
+  const EventDisposition disposition = ClassifyEvent(static_cast<EventType>(type_code), flavor);
+  if (disposition.reason != kOutsideEnumeration) return disposition;
+  if ((flags & kLogEventIgnorableFlag) != 0) {
+    return Neutral("unrecognized type marked ignorable by the source");
   }
-  return ClassifyEvent(static_cast<EventType>(type_code), flavor);
+  return Closed("unrecognized type not marked ignorable");
 }
 
 }  // namespace mybinlog

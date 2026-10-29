@@ -121,6 +121,8 @@ mybinlog::Status Walk(const std::vector<uint8_t>& file) {
 
 MariaDB writes v1 rows events (23-25) and MySQL v2 (30-32); `IsRowsEvent()` covers both, and `DecodeRowsEvent()` picks the layout from the header. `ParseRowsEventHeader()` reads the 48-bit table id and the flags from the post-header, so the caller can pick the TABLE_MAP before decoding.
 
+`VisitRowsEvent(header, body, size, table, options, scratch, visitor, ctx)` decodes the same body but hands each row (each before/after pair for UPDATE) to a `RowVisitorFn` instead of collecting a `RowsEvent`. The rows live in a caller-owned `RowScratch` reused for every row and, when the caller keeps it, every event, so a caller that converts rows into its own type pays for no per-row allocation; see [Rows](rows.md).
+
 ## Decoding rows on worker threads
 
 `DecodeRowsEvent()` reads its `TableMap` only during the call and keeps no state, so rows events can be decoded in parallel. Frame and parse events in order on one thread, keep the table map there, and hand each rows event to a worker together with a copy of the event bytes and of its `TableMap`. A `DecodeBudget`, if used, must not be shared between concurrent calls.

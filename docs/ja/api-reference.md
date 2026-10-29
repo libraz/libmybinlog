@@ -22,7 +22,7 @@
 | `crc32.h` | `ComputeCrc32()`、`UpdateCrc32()` | [チェックサム](checksums.md) |
 | `format_description.h` | `FormatDescriptionEvent`、`ParseFormatDescriptionEvent()` | [チェックサム](checksums.md) |
 | `table_map.h` | `TableMap`、`TableMapColumn`、`ParseTableMapEvent()`、`RealType()` | [行](rows.md) |
-| `row_decoder.h` | `RowsEvent`、`Row`、`DecodeOptions`、`DecodeBudget`、`DecodeRowsEvent()`、`RowsEventHeader`、`ParseRowsEventHeader()`、`kRowsStatementEndFlag`、`kDummyTableId` | [行](rows.md) |
+| `row_decoder.h` | `RowsEvent`、`Row`、`DecodeOptions`、`DecodeBudget`、`DecodeRowsEvent()`、`RowScratch`、`RowVisitorFn`、`VisitRowsEvent()`、`RowsEventHeader`、`ParseRowsEventHeader()`、`kRowsStatementEndFlag`、`kDummyTableId` | [行](rows.md) |
 | `value.h` | `Value`、`Temporal`、`ValueKindName()` | [値](values.md) |
 | `format.h` | `FormatValue()`、`FormatEnumLabel()`、`FormatSetLabels()` | [値](values.md) |
 | `json.h` | `JsonValue`、`ParseJsonBinary()`、`JsonToText()`、`JsonBinaryToText()`、`FindJsonMember()` | [JSON](json.md) |

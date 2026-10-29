@@ -1,5 +1,4 @@
 #include <array>
-#include <utility>
 
 #include "decimal_internal.h"
 
@@ -41,23 +40,26 @@ bool ReadGroup(const uint8_t** cursor, int digits, uint32_t* value) {
   return group < kPowers10[digits];
 }
 
-void AppendPadded(std::string* out, uint32_t value, int digits) {
-  char buf[kDigitsPerGroup];
+// Sign, every digit of DECIMAL(65, s) and the point.
+constexpr size_t kMaxTextBytes = 1 + kMaxPrecision + 1;
+
+char* WritePadded(char* out, uint32_t value, int digits) {
   for (int i = digits - 1; i >= 0; --i) {
-    buf[i] = static_cast<char>('0' + value % 10);
+    out[i] = static_cast<char>('0' + value % 10);
     value /= 10;
   }
-  out->append(buf, static_cast<size_t>(digits));
+  return out + digits;
 }
 
-void AppendUnpadded(std::string* out, uint32_t value) {
+char* WriteUnpadded(char* out, uint32_t value) {
   char buf[kDigitsPerGroup + 1];
   int n = 0;
   do {
     buf[n++] = static_cast<char>('0' + value % 10);
     value /= 10;
   } while (value != 0);
-  while (n > 0) out->push_back(buf[--n]);
+  while (n > 0) *out++ = buf[--n];
+  return out;
 }
 
 }  // namespace
@@ -90,37 +92,40 @@ Status DecodeDecimal(uint32_t meta, const uint8_t* data, std::string* out) {
     for (size_t i = 0; i < width; ++i) buf[i] ^= 0xFF;
   }
 
-  std::string text;
-  if (negative) text.push_back('-');
-  const size_t digits_begin = text.size();
+  // The text is built in place and copied out once: appending digit by digit
+  // regrows the string.
+  char text[kMaxTextBytes];
+  char* end = text;
+  if (negative) *end++ = '-';
+  const char* const digits_begin = end;
   const uint8_t* cursor = buf.data();
   uint32_t group = 0;
   if (layout.int_rest > 0) {
     if (!ReadGroup(&cursor, layout.int_rest, &group)) return Status::kMalformedValue;
-    if (group != 0) AppendUnpadded(&text, group);
+    if (group != 0) end = WriteUnpadded(end, group);
   }
   for (int i = 0; i < layout.int_groups; ++i) {
     if (!ReadGroup(&cursor, kDigitsPerGroup, &group)) return Status::kMalformedValue;
-    if (text.size() > digits_begin) {
-      AppendPadded(&text, group, kDigitsPerGroup);
+    if (end > digits_begin) {
+      end = WritePadded(end, group, kDigitsPerGroup);
     } else if (group != 0) {
-      AppendUnpadded(&text, group);
+      end = WriteUnpadded(end, group);
     }
   }
-  if (text.size() == digits_begin) text.push_back('0');
+  if (end == digits_begin) *end++ = '0';
 
   if (layout.frac_groups > 0 || layout.frac_rest > 0) {
-    text.push_back('.');
+    *end++ = '.';
     for (int i = 0; i < layout.frac_groups; ++i) {
       if (!ReadGroup(&cursor, kDigitsPerGroup, &group)) return Status::kMalformedValue;
-      AppendPadded(&text, group, kDigitsPerGroup);
+      end = WritePadded(end, group, kDigitsPerGroup);
     }
     if (layout.frac_rest > 0) {
       if (!ReadGroup(&cursor, layout.frac_rest, &group)) return Status::kMalformedValue;
-      AppendPadded(&text, group, layout.frac_rest);
+      end = WritePadded(end, group, layout.frac_rest);
     }
   }
-  *out = std::move(text);
+  out->assign(text, static_cast<size_t>(end - text));
   return Status::kOk;
 }
 

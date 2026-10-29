@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mybinlog/event_header.h"
@@ -505,6 +506,171 @@ TEST(CodecRowsEvent, ExhaustedBudgetFailsTheEvent) {
   ASSERT_EQ(Decode(EventType::kWriteRowsEvent, w, IntTable(kColumns), &data, options), Status::kOk);
   EXPECT_EQ(data.rows.size(), 4u);
   EXPECT_EQ(budget.used, budget.limit);
+}
+
+// --- Visiting rows ---
+
+// Copies of what the visitor saw; stops with `stop_with` before row `stop_at`.
+struct Visited {
+  std::vector<Row> rows;
+  std::vector<Row> afters;
+  size_t stop_at = SIZE_MAX;
+  Status stop_with = Status::kOk;
+  bool copy = false;  // leave the scratch rows populated instead of moving from them
+};
+
+Status Visit(void* ctx, Row* row, Row* after) {
+  Visited* visited = static_cast<Visited*>(ctx);
+  if (visited->rows.size() == visited->stop_at) return visited->stop_with;
+  if (visited->copy) {
+    visited->rows.push_back(*row);
+    if (after != nullptr) visited->afters.push_back(*after);
+    return Status::kOk;
+  }
+  // Moved: the scratch rows must survive having their payloads taken.
+  visited->rows.push_back(std::move(*row));
+  if (after != nullptr) visited->afters.push_back(std::move(*after));
+  return Status::kOk;
+}
+
+Status VisitBody(EventType type, const Writer& w, const TableMap& table, Visited* visited,
+                 const DecodeOptions& options = DecodeOptions()) {
+  RowScratch scratch;
+  return VisitRowsEvent(Header(type), w.bytes.data(), w.bytes.size(), table, options, &scratch,
+                        &Visit, visited);
+}
+
+TableMap IntAndVarcharTable() {
+  TableMap table = Table({Column(ColumnType::kLong), Column(ColumnType::kVarchar, 100)});
+  table.columns[1].has_charset = true;
+  table.columns[1].charset = 45;
+  return table;
+}
+
+TEST(CodecRowsEvent, VisitRowsEventSeesWhatDecodeRowsEventReturns) {
+  const TableMap table = IntAndVarcharTable();
+  Writer w = PostHeader();
+  w.U8(2).U8(0x03);
+  w.U8(0x00).Le(1, 4).U8(5).Str("Alice");
+  w.U8(0x02).Le(2, 4);
+  w.U8(0x00).Le(3, 4).U8(3).Str("Bob");
+  DecodeBudget decode_budget;
+  DecodeOptions options;
+  options.budget = &decode_budget;
+  options.per_value_overhead = kValueOverhead;
+  options.per_row_overhead = kRowOverhead;
+  RowsEvent data;
+  ASSERT_EQ(Decode(EventType::kWriteRowsEvent, w, table, &data, options), Status::kOk);
+
+  DecodeBudget visit_budget;
+  options.budget = &visit_budget;
+  Visited visited;
+  ASSERT_EQ(VisitBody(EventType::kWriteRowsEvent, w, table, &visited, options), Status::kOk);
+  EXPECT_TRUE(visited.afters.empty());
+  EXPECT_EQ(visit_budget.used, decode_budget.used);
+  ASSERT_EQ(visited.rows.size(), data.rows.size());
+  for (size_t r = 0; r < data.rows.size(); ++r) {
+    ASSERT_EQ(visited.rows[r].size(), data.rows[r].size());
+    for (size_t c = 0; c < data.rows[r].size(); ++c) {
+      SCOPED_TRACE(r * 10 + c);
+      EXPECT_EQ(visited.rows[r][c].kind, data.rows[r][c].kind);
+      EXPECT_EQ(visited.rows[r][c].type, data.rows[r][c].type);
+      EXPECT_EQ(visited.rows[r][c].i, data.rows[r][c].i);
+      EXPECT_EQ(visited.rows[r][c].bytes, data.rows[r][c].bytes);
+    }
+  }
+  EXPECT_EQ(visited.rows[1][1].kind, Value::Kind::kNull);
+  EXPECT_EQ(visited.rows[2][1].bytes, "Bob");
+}
+
+TEST(CodecRowsEvent, VisitRowsEventPassesUpdatePairs) {
+  const TableMap table = IntAndVarcharTable();
+  Writer w = PostHeader();
+  w.U8(2).U8(0x03).U8(0x03);
+  w.U8(0x00).Le(1, 4).U8(4).Str("aaaa").U8(0x00).Le(1, 4).U8(2).Str("bb");
+  w.U8(0x00).Le(2, 4).U8(1).Str("c").U8(0x02).Le(2, 4);
+  Visited visited;
+  ASSERT_EQ(VisitBody(EventType::kUpdateRowsEvent, w, table, &visited), Status::kOk);
+  ASSERT_EQ(visited.rows.size(), 2u);
+  ASSERT_EQ(visited.afters.size(), 2u);
+  EXPECT_EQ(visited.rows[0][1].bytes, "aaaa");
+  EXPECT_EQ(visited.afters[0][1].bytes, "bb");
+  EXPECT_EQ(visited.rows[1][1].bytes, "c");
+  EXPECT_EQ(visited.afters[1][1].kind, Value::Kind::kNull);
+}
+
+TEST(CodecRowsEvent, AVisitorStatusStopsTheDecode) {
+  Writer w = PostHeader();
+  w.U8(1).U8(0x01).U8(0x00).Le(100, 4).U8(0x00).Le(200, 4).U8(0x00).Le(300, 4);
+  Visited visited;
+  visited.stop_at = 1;
+  visited.stop_with = Status::kLimitExceeded;
+  EXPECT_EQ(VisitBody(EventType::kWriteRowsEvent, w, IntTable(1), &visited),
+            Status::kLimitExceeded);
+  ASSERT_EQ(visited.rows.size(), 1u);
+  EXPECT_EQ(visited.rows[0][0].i, 100);
+}
+
+TEST(CodecRowsEvent, RowsBeforeAFailureHaveBeenVisited) {
+  Writer w = PostHeader();
+  w.U8(1).U8(0x01).U8(0x00).Le(1, 4).U8(0x00).Le(2, 2);
+  Visited visited;
+  EXPECT_EQ(VisitBody(EventType::kWriteRowsEvent, w, IntTable(1), &visited), Status::kTruncated);
+  ASSERT_EQ(visited.rows.size(), 1u);
+  EXPECT_EQ(visited.rows[0][0].i, 1);
+
+  Visited none;
+  EXPECT_EQ(VisitBody(EventType::kQueryEvent, w, IntTable(1), &none), Status::kUnsupported);
+  EXPECT_TRUE(none.rows.empty());
+}
+
+TEST(CodecRowsEvent, OneScratchServesEventsOfDifferentShapes) {
+  const TableMap wide = IntAndVarcharTable();
+  Writer update = PostHeader();
+  update.U8(2).U8(0x03).U8(0x03);
+  update.U8(0x00).Le(1, 4).U8(4).Str("aaaa").U8(0x00).Le(2, 4).U8(2).Str("bb");
+  Writer narrow = PostHeader();
+  narrow.U8(1).U8(0x01).U8(0x00).Le(7, 4);
+
+  RowScratch scratch;
+  Visited first;
+  first.copy = true;
+  ASSERT_EQ(VisitRowsEvent(Header(EventType::kUpdateRowsEvent), update.bytes.data(),
+                           update.bytes.size(), wide, DecodeOptions(), &scratch, &Visit, &first),
+            Status::kOk);
+  ASSERT_EQ(first.afters.size(), 1u);
+  EXPECT_EQ(first.afters[0][1].bytes, "bb");
+
+  // A narrower table after a wider one: nothing of the earlier rows leaks through.
+  Visited second;
+  ASSERT_EQ(
+      VisitRowsEvent(Header(EventType::kWriteRowsEvent), narrow.bytes.data(), narrow.bytes.size(),
+                     IntTable(1), DecodeOptions(), &scratch, &Visit, &second),
+      Status::kOk);
+  ASSERT_EQ(second.rows.size(), 1u);
+  ASSERT_EQ(second.rows[0].size(), 1u);
+  EXPECT_EQ(second.rows[0][0].i, 7);
+  EXPECT_TRUE(second.afters.empty());
+}
+
+TEST(CodecRowsEvent, AReusedScratchStartsEveryRowFromDefaults) {
+  const TableMap table = IntAndVarcharTable();
+  Writer w = PostHeader();
+  w.U8(2).U8(0x03);
+  w.U8(0x00).Le(-5, 4).U8(4).Str("aaaa");
+  w.U8(0x02).Le(6, 4);
+  RowScratch scratch;
+  Visited visited;
+  visited.copy = true;
+  ASSERT_EQ(VisitRowsEvent(Header(EventType::kWriteRowsEvent), w.bytes.data(), w.bytes.size(),
+                           table, DecodeOptions(), &scratch, &Visit, &visited),
+            Status::kOk);
+  ASSERT_EQ(visited.rows.size(), 2u);
+  EXPECT_EQ(visited.rows[0][1].bytes, "aaaa");
+  EXPECT_EQ(visited.rows[1][0].i, 6);
+  EXPECT_EQ(visited.rows[1][1].kind, Value::Kind::kNull);
+  EXPECT_TRUE(visited.rows[1][1].bytes.empty());
+  EXPECT_EQ(visited.rows[1][1].type, ColumnType::kVarchar);
 }
 
 }  // namespace

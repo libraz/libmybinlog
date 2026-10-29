@@ -172,6 +172,64 @@ struct RowsEvent {
                                                   size_t size, const TableMap& table,
                                                   const DecodeOptions& options, RowsEvent* out);
 
+/**
+ * @brief Rows VisitRowsEvent() decodes into, owned by the caller.
+ *
+ * Kept across calls, the rows and their values' string capacity are reused, so
+ * a stream of rows events allocates no Row after the first. Contents between
+ * calls are unspecified.
+ */
+struct RowScratch {
+  Row row;    ///< WRITE and DELETE image, or UPDATE before image.
+  Row after;  ///< UPDATE and PARTIAL_UPDATE after image.
+};
+
+/**
+ * @brief Receive one decoded row from VisitRowsEvent().
+ *
+ * Both images are the caller's RowScratch, which the decoder overwrites for the
+ * next row: the visitor may modify them or move payloads out of them
+ * (Value::bytes), but must not keep a pointer into them past the call.
+ *
+ * @param ctx Caller context passed through VisitRowsEvent().
+ * @param row WRITE and DELETE: the row image; UPDATE and PARTIAL_UPDATE: the
+ *   before image.
+ * @param after UPDATE and PARTIAL_UPDATE: the after image; nullptr otherwise.
+ * @return kOk to continue; any other status stops the decode, and
+ *   VisitRowsEvent() returns it unchanged.
+ */
+using RowVisitorFn = Status (*)(void* ctx, Row* row, Row* after);
+
+/**
+ * @brief Decode a rows event like DecodeRowsEvent(), handing each row to a
+ *   visitor instead of collecting them.
+ *
+ * Each row is decoded into @p scratch, so a caller that converts rows into its
+ * own representation and keeps one RowScratch pays for no RowsEvent and no
+ * per-row or per-event Row allocation. Rows, values, budget charges and every
+ * status are those of DecodeRowsEvent() on the same input; a row is visited
+ * after it and its budget charge have succeeded. Unlike DecodeRowsEvent(), the
+ * rows before a failure have already been visited, so a caller that must
+ * publish an event whole buffers what it was given until kOk is returned. The
+ * partition ids of the v2 extra row info are reported only by DecodeRowsEvent().
+ *
+ * @param header Header of the event; its type code selects v1/v2 and the shape.
+ * @param body Bytes after the common header.
+ * @param size Body length, checksum trailer excluded.
+ * @param table The TABLE_MAP the event's table id refers to; only read during the call.
+ * @param options Column selection and limits, as in DecodeRowsEvent().
+ * @param scratch Rows to decode into; must not be null.
+ * @param visitor Called once per row, or per pair for UPDATE; must not be null.
+ * @param ctx Passed to @p visitor.
+ * @return kOk after every row was visited; the first non-kOk status of
+ *   @p visitor; otherwise as DecodeRowsEvent(). Reentrant when @p visitor is;
+ *   concurrent calls must not share a DecodeBudget or a RowScratch.
+ */
+[[nodiscard]] MYBINLOG_API Status VisitRowsEvent(const EventHeader& header, const uint8_t* body,
+                                                 size_t size, const TableMap& table,
+                                                 const DecodeOptions& options, RowScratch* scratch,
+                                                 RowVisitorFn visitor, void* ctx);
+
 /** @brief STMT_END_F in a rows event's flags: the last rows event of its statement. */
 inline constexpr uint16_t kRowsStatementEndFlag = 0x0001;
 

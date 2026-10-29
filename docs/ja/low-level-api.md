@@ -121,6 +121,8 @@ mybinlog::Status Walk(const std::vector<uint8_t>& file) {
 
 MariaDB は v1 の行イベント (23-25)、MySQL は v2 (30-32) を書きます。`IsRowsEvent()` は両方を含み、`DecodeRowsEvent()` はヘッダからレイアウトを選びます。`ParseRowsEventHeader()` はポストヘッダから 48 ビットのテーブル ID とフラグを読むので、呼び出し側はデコードの前に TABLE_MAP を選べます。
 
+`VisitRowsEvent(header, body, size, table, options, scratch, visitor, ctx)` は同じ本体をデコードしますが、`RowsEvent` に集めるかわりに各行（UPDATE では更新前と更新後の組）を `RowVisitorFn` に渡します。行は呼び出し側が持つ `RowScratch` に置かれ、すべての行で、呼び出し側が保持すればすべてのイベントで再利用されるので、行を自前の型に変換する呼び出し側は行ごとの割り当てを払いません。[行](rows.md)を参照してください。
+
 ## ワーカースレッドでの行のデコード
 
 `DecodeRowsEvent()` は `TableMap` を呼び出しの間だけ読み、状態を持たないので、行イベントを並列にデコードできます。1 つのスレッドでイベントを順に切り出して解析し、テーブルの対応もそこで保持し、各行イベントをイベントのバイト列と `TableMap` のコピーとともにワーカーへ渡します。`DecodeBudget` を使う場合、並行する呼び出しで共有してはいけません。

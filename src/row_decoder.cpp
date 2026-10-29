@@ -384,6 +384,20 @@ Status ReadValueOptions(ByteReader* reader, size_t json_columns, const uint8_t**
   return reader->ReadBytes(BitmapBytes(json_columns), partial);
 }
 
+// Back to a default Value, keeping the string's capacity. Must name every member of Value.
+void ResetValue(Value* value) {
+  value->kind = Value::Kind::kNull;
+  value->type = ColumnType::kLong;
+  value->i = 0;
+  value->u = 0;
+  value->d = 0.0;
+  value->t = Temporal{};
+  value->epoch_seconds = 0;
+  value->microsecond = 0;
+  value->fsp = 0;
+  value->bytes.clear();
+}
+
 // One row image: under @p value_options the PARTIAL_UPDATE_ROWS prefix, then
 // the NULL bitmap over the carried columns, then a value per carried non-NULL
 // column.
@@ -407,13 +421,20 @@ Status DecodeImage(ByteReader* reader, const TableMap& table, const ImageColumns
     budget->Charge(columns * options.per_value_overhead);
   }
 
-  row->assign(columns, Value{});
+  // A reused image is reset in place; assigning Value{} per column copies each
+  // string out of line.
+  if (row->size() == columns) {
+    for (Value& value : *row) ResetValue(&value);
+  } else {
+    row->assign(columns, Value{});
+  }
   size_t carried = 0;  // NULL bitmap index
   size_t json = 0;     // partial bitmap index
   for (size_t i = 0; i < columns; ++i) {
     const TableMapColumn& column = table.columns[i];
     Value& value = (*row)[i];
-    value.type = RealType(column);
+    // Only a STRING column can be an ENUM or SET; RealType() is not inlined here.
+    value.type = column.type == ColumnType::kString ? RealType(column) : column.type;
     // Every JSON column takes a partial bit, carried or not.
     const bool is_diff =
         column.type == ColumnType::kJson && partial != nullptr && BitmapIsSet(partial, json++);
@@ -471,10 +492,11 @@ Status ChargeRow(const DecodeOptions& options) {
   return Status::kLimitExceeded;
 }
 
-}  // namespace
-
-Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t size,
-                       const TableMap& table, const DecodeOptions& options, RowsEvent* out) {
+// Decodes every row of a rows event into @p scratch and hands each to
+// @p visitor; the extra row info goes to @p info.
+Status WalkRowsEvent(const EventHeader& header, const uint8_t* body, size_t size,
+                     const TableMap& table, const DecodeOptions& options, RowsEvent* info,
+                     RowScratch* scratch, RowVisitorFn visitor, void* ctx) {
   bool v2 = false;
   bool update = false;
   bool value_options = false;  // after images open with binlog_row_value_options
@@ -500,7 +522,6 @@ Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t si
   }
   if (body == nullptr) return Status::kTruncated;
 
-  RowsEvent data;
   ByteReader reader(body, size);
   Status status = reader.Skip(8);  // table_id (6), flags (2)
   if (status != Status::kOk) return status;
@@ -510,10 +531,10 @@ Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t si
     status = reader.ReadU16Le(&extra);
     if (status != Status::kOk) return status;
     if (extra < 2) return Status::kInvalidMetadata;
-    const uint8_t* info = nullptr;
-    status = reader.ReadBytes(extra - 2u, &info);
+    const uint8_t* extra_info = nullptr;
+    status = reader.ReadBytes(extra - 2u, &extra_info);
     if (status != Status::kOk) return status;
-    status = ParseExtraRowInfo(info, extra - 2u, update, &data);
+    status = ParseExtraRowInfo(extra_info, extra - 2u, update, info);
     if (status != Status::kOk) return status;
   }
 
@@ -535,31 +556,55 @@ Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t si
       std::count_if(table.columns.begin(), table.columns.end(),
                     [](const TableMapColumn& c) { return c.type == ColumnType::kJson; }));
 
+  Row* const first = &scratch->row;
+  Row* const second = &scratch->after;
   while (reader.remaining() > 0) {
     const size_t before = reader.remaining();
+    status = DecodeImage(&reader, table, images[0], false, json_columns, options, first);
+    if (status != Status::kOk) return status;
     if (update) {
-      std::pair<Row, Row> pair;
-      status = DecodeImage(&reader, table, images[0], false, json_columns, options, &pair.first);
+      status = DecodeImage(&reader, table, images[1], value_options, json_columns, options, second);
       if (status != Status::kOk) return status;
-      status = DecodeImage(&reader, table, images[1], value_options, json_columns, options,
-                           &pair.second);
-      if (status != Status::kOk) return status;
-      status = ChargeRow(options);
-      if (status != Status::kOk) return status;
-      data.updates.push_back(std::move(pair));
-    } else {
-      Row row;
-      status = DecodeImage(&reader, table, images[0], false, json_columns, options, &row);
-      if (status != Status::kOk) return status;
-      status = ChargeRow(options);
-      if (status != Status::kOk) return status;
-      data.rows.push_back(std::move(row));
     }
+    status = ChargeRow(options);
+    if (status != Status::kOk) return status;
     // Images that carry no column take no bytes, so the rest cannot be rows.
     if (reader.remaining() == before) return Status::kInvalidMetadata;
+    status = visitor(ctx, first, update ? second : nullptr);
+    if (status != Status::kOk) return status;
   }
+  return Status::kOk;
+}
+
+// Collects the visited rows into a RowsEvent.
+Status CollectRow(void* ctx, Row* row, Row* after) {
+  RowsEvent* data = static_cast<RowsEvent*>(ctx);
+  if (after != nullptr) {
+    data->updates.emplace_back(std::move(*row), std::move(*after));
+  } else {
+    data->rows.push_back(std::move(*row));
+  }
+  return Status::kOk;
+}
+
+}  // namespace
+
+Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t size,
+                       const TableMap& table, const DecodeOptions& options, RowsEvent* out) {
+  RowsEvent data;
+  RowScratch scratch;
+  const Status status =
+      WalkRowsEvent(header, body, size, table, options, &data, &scratch, &CollectRow, &data);
+  if (status != Status::kOk) return status;
   *out = std::move(data);
   return Status::kOk;
+}
+
+Status VisitRowsEvent(const EventHeader& header, const uint8_t* body, size_t size,
+                      const TableMap& table, const DecodeOptions& options, RowScratch* scratch,
+                      RowVisitorFn visitor, void* ctx) {
+  RowsEvent info;
+  return WalkRowsEvent(header, body, size, table, options, &info, scratch, visitor, ctx);
 }
 
 Status ParseRowsEventHeader(const EventHeader& header, const uint8_t* body, size_t size,

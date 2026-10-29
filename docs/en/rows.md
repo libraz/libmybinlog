@@ -76,6 +76,12 @@ mybinlog::Decoder decoder(options);
 
 A budget is mutated by the decode it is passed to, so concurrent decodes must not share one. A budget passed through `DecoderOptions::rows.budget` accumulates across every rows event of that decoder.
 
+## Visiting rows without collecting them
+
+`VisitRowsEvent()` takes the same arguments as `DecodeRowsEvent()` except that a `RowScratch`, a `RowVisitorFn` and a context pointer replace the `RowsEvent`. Every row is decoded into the `RowScratch`; kept across calls, it lets a stream of rows events allocate no `Row` after the first. The visitor receives each row image, and for UPDATE and PARTIAL_UPDATE the after image as a second argument (null otherwise). Both images belong to the scratch, which the decoder overwrites for the next row: the visitor may move payloads out of them (`Value::bytes`) but must not keep pointers into them.
+
+Values, budget charges and statuses are those of `DecodeRowsEvent()`; a row is visited once it and its budget charge have succeeded. A visitor status other than `kOk` stops the decode and is returned unchanged. Rows before a failure have already been visited, so a caller that must publish an event whole buffers what it was given until `VisitRowsEvent()` returns `kOk`. The partition ids of the v2 extra row info are reported only by `DecodeRowsEvent()`.
+
 ## Decoding on worker threads
 
 `DecodeRowsEvent()` is reentrant and reads its `TableMap` only during the call. A reader can frame and parse events on one thread and hand rows events, each with a copy of its `TableMap`, to worker threads; see [Low-level API](low-level-api.md).
