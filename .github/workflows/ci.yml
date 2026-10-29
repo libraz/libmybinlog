@@ -65,3 +65,6 @@ jobs:
 
       - name: Check formatting
         run: git ls-files -z -- '*.h' '*.cpp' | xargs -0 clang-format --dry-run --Werror
+
+      - name: Check the generated compatibility tables
+        run: python3 tools/gen_compat_table.py --check
