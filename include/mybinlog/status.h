@@ -25,6 +25,8 @@ enum class Status : uint8_t {
   kUnsupported,       ///< A well-formed type or event the library does not decode.
   kChecksumMismatch,  ///< CRC32 mismatch, or a frame too short to carry its trailer.
   kLimitExceeded,     ///< A configured size or budget limit was exceeded.
+  /** Decoder::Next() holds no complete event yet; Feed() more bytes. Not an error. */
+  kNeedMoreData,
 };
 
 /**

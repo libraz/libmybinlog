@@ -44,6 +44,15 @@ inline constexpr uint8_t kJsonbFalseLiteral = 0x02;
  * @brief Append a finite double as `my_gcvt(MY_GCVT_ARG_DOUBLE, MY_GCVT_MAX_FIELD_WIDTH)`
  *        followed by the ".0" the server's JSON printer adds to integral values.
  */
+/**
+ * @brief Append a double the way the server's `my_gcvt` writes it: fixed or
+ *   exponent form by the same width rule, no trailing ".0".
+ * @param precision Significant digits (6 for FLOAT, as `my_gcvt` with
+ *   MY_GCVT_ARG_FLOAT keeps); 0 for the shortest round-trip digits (DOUBLE).
+ */
+void AppendGcvt(double value, int precision, std::string* out);
+
+/** @brief AppendGcvt() with shortest digits, plus ".0" when the text has no '.' or 'e'. */
 void AppendJsonDouble(double value, std::string* out);
 
 /** @brief Append @p data double-quoted with the server's JSON escapes (`double_quote`). */

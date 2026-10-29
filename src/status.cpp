@@ -18,6 +18,8 @@ const char* StatusName(Status status) noexcept {
       return "kChecksumMismatch";
     case Status::kLimitExceeded:
       return "kLimitExceeded";
+    case Status::kNeedMoreData:
+      return "kNeedMoreData";
   }
   return "kUnknown";
 }

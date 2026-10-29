@@ -245,10 +245,14 @@ Status AppendValue(const JsonValue& value, size_t depth, std::string* out) {
 
 }  // namespace
 
-void AppendJsonDouble(double value, std::string* out) {
-  // Shortest round-trip digits, as dtoa mode 4 with ndigits >= 17 returns them.
+void AppendGcvt(double value, int precision, std::string* out) {
+  // Shortest round-trip digits, as dtoa mode 4 with ndigits >= 17 returns them,
+  // or @p precision significant digits with trailing zeros dropped.
   char buf[40];
-  const auto result = std::to_chars(buf, buf + sizeof(buf), value, std::chars_format::scientific);
+  const auto result =
+      precision > 0 ? std::to_chars(buf, buf + sizeof(buf), value, std::chars_format::scientific,
+                                    precision - 1)
+                    : std::to_chars(buf, buf + sizeof(buf), value, std::chars_format::scientific);
   const char* p = buf;
   const bool sign = *p == '-';
   if (sign) ++p;
@@ -256,6 +260,7 @@ void AppendJsonDouble(double value, std::string* out) {
   for (; p < result.ptr && *p != 'e'; ++p) {
     if (*p != '.') digits.push_back(*p);
   }
+  while (digits.size() > 1 && digits.back() == '0') digits.pop_back();
   int exponent = 0;
   bool negative_exponent = false;
   if (p < result.ptr) ++p;  // 'e'
@@ -275,7 +280,6 @@ void AppendJsonDouble(double value, std::string* out) {
       (!have_space ||
        (decpt >= -kMaxDecptForFixed + 1 && (decpt <= kMaxDecptForFixed || len > decpt)));
 
-  const size_t start = out->size();
   if (sign) out->push_back('-');
   if (fixed) {
     if (decpt <= 0) {
@@ -302,6 +306,11 @@ void AppendJsonDouble(double value, std::string* out) {
     }
     AppendDigits(static_cast<uint64_t>(decpt), 0, out);
   }
+}
+
+void AppendJsonDouble(double value, std::string* out) {
+  const size_t start = out->size();
+  AppendGcvt(value, 0, out);
   if (out->find_first_of(".e", start) == std::string::npos) out->append(".0");
 }
 

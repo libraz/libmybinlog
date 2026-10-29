@@ -21,8 +21,6 @@ It works on bytes you already hold, so it has no network code, no exceptions and
 - **MariaDB events**: GTID, GTID_LIST and annotate-rows events.
 - **Server flavor**: detection from a version string or a `gtid_binlog_pos` probe.
 
-Decoding of row images is not part of this release.
-
 ## Installation
 
 Add it with CMake `FetchContent`, pinned to a tag or commit:
@@ -52,22 +50,20 @@ The tests and googletest are built only when libmybinlog is the top-level projec
 ## Quick start
 
 ```cpp
-#include "mybinlog/checksum.h"
-#include "mybinlog/event_header.h"
+#include <mybinlog/mybinlog.h>
 
-mybinlog::ChecksumTracker tracker;  // one per binlog stream
-
-// `frame` holds one whole event, `len` bytes.
-mybinlog::EventHeader header;
-if (mybinlog::ParseEventHeader(frame, len, &header) == mybinlog::Status::kOk) {
-  mybinlog::FrameLayout layout;
-  if (tracker.OnEvent(header, frame, len, &layout) == mybinlog::Status::kOk) {
-    // layout.body_length() bytes of event body follow the common header.
+mybinlog::Decoder decoder;
+decoder.Feed(data, size);  // a whole binlog file, or stream bytes in any split
+mybinlog::Event event;
+while (decoder.Next(&event) == mybinlog::Status::kOk) {
+  if (auto* rows = std::get_if<mybinlog::TableRowsEvent>(&event.body); rows && rows->table) {
+    std::printf("%s.%s: %zu rows\n", rows->table->schema.c_str(), rows->table->table.c_str(),
+                rows->rows.rows.size() + rows->rows.updates.size());
   }
 }
 ```
 
-Every function returns a `mybinlog::Status` and writes its result through an out parameter.
+`Next` returns `kNeedMoreData` once the buffered bytes are used up; any other status is an error, described by `decoder.last_error()`. [`examples/mybinlog-dump`](examples/mybinlog-dump/main.cpp) prints every event of a binlog file as JSON Lines. The per-event functions under the decoder (`ParseTableMapEvent`, `DecodeRowsEvent`, ...) are public too.
 
 ## Build and test
 

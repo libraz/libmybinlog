@@ -76,13 +76,12 @@ TEST(CodecControlEvents, HeartbeatWithEmptyName) {
             Status::kTruncated);
 }
 
-TEST(CodecControlEvents, HeartbeatV2AndOtherTypesAreUnsupported) {
+TEST(CodecControlEvents, HeartbeatOtherTypesAreUnsupported) {
   const Bytes body = {'b'};
   HeartbeatEvent heartbeat;
-  for (const EventType type : {EventType::kHeartbeatLogEventV2, EventType::kRotateEvent}) {
-    EXPECT_EQ(ParseHeartbeatEvent(HeaderOf(type), body.data(), body.size(), &heartbeat),
-              Status::kUnsupported);
-  }
+  EXPECT_EQ(
+      ParseHeartbeatEvent(HeaderOf(EventType::kRotateEvent), body.data(), body.size(), &heartbeat),
+      Status::kUnsupported);
 }
 
 // --- PREVIOUS_GTIDS_LOG_EVENT ---

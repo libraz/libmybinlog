@@ -10,6 +10,22 @@ target_compile_definitions(mybinlog_tests PRIVATE
 target_compile_options(mybinlog_tests PRIVATE -fno-exceptions -fno-rtti)
 gtest_discover_tests(mybinlog_tests DISCOVERY_TIMEOUT 30 PROPERTIES TIMEOUT 10)
 
+# mybinlog-dump on each fixture; MySQL fixtures hold 6 rows events, MariaDB ones 4.
+if(TARGET mybinlog-dump)
+  foreach(entry mysql84_none_tagged:6 mysql84_crc32_tagged:6 mysql97_none_tagged:6
+                mysql97_crc32_tagged:6 mariadb118_none:4 mariadb118_crc32:4)
+    string(REPLACE ":" ";" parts ${entry})
+    list(GET parts 0 fixture)
+    list(GET parts 1 rows_events)
+    add_test(NAME CodecExample.Dump_${fixture}
+      COMMAND ${CMAKE_COMMAND} -DDUMP=$<TARGET_FILE:mybinlog-dump>
+        -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/${fixture}.bin
+        -DEXPECTED_ROWS_EVENTS=${rows_events}
+        -P ${PROJECT_SOURCE_DIR}/examples/mybinlog-dump/smoke_test.cmake)
+    set_tests_properties(CodecExample.Dump_${fixture} PROPERTIES TIMEOUT 30)
+  endforeach()
+endif()
+
 # Installs the built library into a scratch prefix and builds a consumer against it.
 if(MYBINLOG_INSTALL)
   get_target_property(MYBINLOG_TEST_LIBRARY_TYPE mybinlog TYPE)

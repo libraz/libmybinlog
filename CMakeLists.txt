@@ -9,6 +9,7 @@ endif()
 
 option(MYBINLOG_BUILD_TESTS "Build the mybinlog tests" ${MYBINLOG_IS_TOP_LEVEL})
 option(MYBINLOG_INSTALL "Generate the mybinlog install rules" ${MYBINLOG_IS_TOP_LEVEL})
+option(MYBINLOG_BUILD_EXAMPLES "Build the mybinlog examples" ${MYBINLOG_IS_TOP_LEVEL})
 # Off when consumed so an embedding build never links a libzstd it did not ask for.
 option(MYBINLOG_WITH_ZSTD "Decompress zstd TRANSACTION_PAYLOAD events" ${MYBINLOG_IS_TOP_LEVEL})
 
@@ -161,6 +162,10 @@ if(MYBINLOG_INSTALL)
     ${CMAKE_CURRENT_BINARY_DIR}/mybinlog.pc @ONLY)
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/mybinlog.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+endif()
+
+if(MYBINLOG_BUILD_EXAMPLES)
+  add_subdirectory(examples)
 endif()
 
 if(MYBINLOG_BUILD_TESTS)
