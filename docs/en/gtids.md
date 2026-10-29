@@ -39,6 +39,7 @@ if (mybinlog::GtidSet::Parse("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5:mytag:1-2
 | `EncodeBinary(out)` | The binary form for `COM_BINLOG_DUMP_GTID`: format 0 when no TSID has a tag, format 1 otherwise. |
 | `DecodeBinary(data, size, out)` | Reads the binary form, as in a PREVIOUS_GTIDS body. |
 | `Add(uuid, tag, interval)`, `Merge(other)` | Add one interval `[start, end)` to a TSID, or union another set. |
+| `sources()` | Every TSID with its sorted, merged `[start, end)` intervals, for rendering the set in another text form. |
 | `IsSubsetOf(other)`, `empty()`, `Clear()` | Set queries and reset. |
 
 `Interval` ends are exclusive: `{1, 6}` is `1-5`. A TSID may hold at most `kMaxIntervalsPerTsid` (65536) intervals; beyond that `Parse`, `Add`, `Merge` and `DecodeBinary` fail with `kLimitExceeded`, which bounds memory on untrusted input.

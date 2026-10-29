@@ -468,6 +468,31 @@ TEST(CodecGtidSet, IntervalCountIsBounded) {
   EXPECT_EQ(set.Merge(one), Status::kLimitExceeded);
 }
 
+TEST(CodecGtidSet, SourcesListEachTsidWithMergedIntervals) {
+  GtidSet set;
+  ASSERT_EQ(GtidSet::Parse(std::string(kSid2) + ":5," + kSid + ":4-6:1-3:9:Tag:2", &set),
+            Status::kOk);
+  const auto& sources = set.sources();
+  ASSERT_EQ(sources.size(), 3u);
+  auto it = sources.begin();
+  EXPECT_EQ(FormatUuid(it->first.uuid), kSid);
+  EXPECT_EQ(it->first.tag, "");
+  ASSERT_EQ(it->second.size(), 2u);
+  EXPECT_EQ(it->second[0].start, 1u);
+  EXPECT_EQ(it->second[0].end, 7u);
+  EXPECT_EQ(it->second[1].start, 9u);
+  EXPECT_EQ(it->second[1].end, 10u);
+  ++it;
+  EXPECT_EQ(FormatUuid(it->first.uuid), kSid);
+  EXPECT_EQ(it->first.tag, "tag");
+  ASSERT_EQ(it->second.size(), 1u);
+  EXPECT_EQ(it->second[0].start, 2u);
+  ++it;
+  EXPECT_EQ(FormatUuid(it->first.uuid), kSid2);
+  EXPECT_EQ(it->second[0].start, 5u);
+  EXPECT_EQ(it->second[0].end, 6u);
+}
+
 TEST(CodecGtidSet, TagNormalization) {
   std::string tag;
   EXPECT_EQ(NormalizeGtidTag("MyTag", &tag), Status::kOk);

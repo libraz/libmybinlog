@@ -139,6 +139,16 @@ class MYBINLOG_API GtidSet {
    */
   [[nodiscard]] bool IsSubsetOf(const GtidSet& other) const;
 
+  /**
+   * @brief Every TSID with its intervals, ordered by UUID then tag.
+   *
+   * Each TSID's intervals are sorted, non-empty, and neither overlap nor touch,
+   * so a caller can render the set in its own text form.
+   *
+   * @return The set's contents; valid until the set is next modified.
+   */
+  [[nodiscard]] const std::map<Tsid, std::vector<Interval>>& sources() const { return sets_; }
+
   /** @return Whether the set holds no GTID. */
   [[nodiscard]] bool empty() const { return sets_.empty(); }
 

@@ -39,6 +39,7 @@ if (mybinlog::GtidSet::Parse("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5:mytag:1-2
 | `EncodeBinary(out)` | `COM_BINLOG_DUMP_GTID` 用のバイナリ形式。タグを持つ TSID がなければ形式 0、あれば形式 1 です。 |
 | `DecodeBinary(data, size, out)` | PREVIOUS_GTIDS の本体などのバイナリ形式を読みます。 |
 | `Add(uuid, tag, interval)`、`Merge(other)` | TSID に区間 `[start, end)` を 1 つ加えるか、別の集合との和をとります。 |
+| `sources()` | TSID ごとの区間 `[start, end)` を、並べ替えて結合した形で返します。別の書式で集合を書き出すときに使います。 |
 | `IsSubsetOf(other)`、`empty()`、`Clear()` | 集合の問い合わせと初期化。 |
 
 `Interval` の終端は含みません。`{1, 6}` は `1-5` です。1 つの TSID が持てる区間は `kMaxIntervalsPerTsid`（65536）までで、超えると `Parse`、`Add`、`Merge`、`DecodeBinary` は `kLimitExceeded` で失敗します。信頼できない入力に対するメモリの上限です。
