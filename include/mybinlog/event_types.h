@@ -88,9 +88,10 @@ enum class EventType : uint8_t {
 [[nodiscard]] MYBINLOG_API const char* EventTypeName(EventType type) noexcept;
 
 /**
- * @brief Whether a type code is an uncompressed MySQL rows event.
+ * @brief Whether a type code is a rows event DecodeRowsEvent accepts as is.
  * @param type_code Header byte 4.
- * @return true for WRITE/UPDATE/DELETE_ROWS v1 (23-25) and v2 (30-32). Reentrant.
+ * @return true for WRITE/UPDATE/DELETE_ROWS v1 (23-25), v2 (30-32) and PARTIAL_UPDATE_ROWS (39);
+ *         MariaDB compressed rows events need DecompressMariaDbEvent first. Reentrant.
  */
 [[nodiscard]] MYBINLOG_API bool IsRowsEvent(uint8_t type_code) noexcept;
 

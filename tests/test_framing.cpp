@@ -275,14 +275,15 @@ TEST(CodecFraming, ParseHeaderTooShort) {
 TEST(CodecFraming, IsRowsEvent) {
   for (EventType type :
        {EventType::kWriteRowsEventV1, EventType::kUpdateRowsEventV1, EventType::kDeleteRowsEventV1,
-        EventType::kWriteRowsEvent, EventType::kUpdateRowsEvent, EventType::kDeleteRowsEvent}) {
+        EventType::kWriteRowsEvent, EventType::kUpdateRowsEvent, EventType::kDeleteRowsEvent,
+        EventType::kPartialUpdateRowsEvent}) {
     EXPECT_TRUE(IsRowsEvent(type)) << EventTypeName(type);
     EXPECT_TRUE(IsRowsEvent(static_cast<uint8_t>(type))) << EventTypeName(type);
   }
   for (EventType type :
        {EventType::kTableMapEvent, EventType::kRotateEvent, EventType::kFormatDescriptionEvent,
         EventType::kXidEvent, EventType::kGtidLogEvent, EventType::kUnknown,
-        EventType::kPartialUpdateRowsEvent, EventType::kMariaDBWriteRowsCompressedEvent}) {
+        EventType::kMariaDBWriteRowsCompressedEvent}) {
     EXPECT_FALSE(IsRowsEvent(type)) << EventTypeName(type);
   }
   EXPECT_FALSE(IsRowsEvent(static_cast<uint8_t>(99)));

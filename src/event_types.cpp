@@ -121,6 +121,7 @@ bool IsRowsEvent(EventType type) noexcept {
     case EventType::kWriteRowsEvent:
     case EventType::kUpdateRowsEvent:
     case EventType::kDeleteRowsEvent:
+    case EventType::kPartialUpdateRowsEvent:
       return true;
     default:
       return false;

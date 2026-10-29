@@ -22,6 +22,17 @@ constexpr uint32_t kMaxLengthPrefixWidth = 4;
 constexpr size_t kMaxBitBytes = 8;
 // Field_typed_array stores its value like JSON with a fixed 4-byte length.
 constexpr uint32_t kTypedArrayPrefixWidth = 4;
+// Json_diff_vector::write_binary opens with a 4-byte length (sql-common/json_diff.cc).
+constexpr uint32_t kJsonDiffPrefixWidth = 4;
+
+// binlog_row_value_options bit PARTIAL_JSON_UPDATES; upstream rejects any other bit.
+constexpr uint64_t kPartialJsonUpdates = 1;
+
+// v2 extra row info type codes (libs/mysql/binlog/event/rows_event.h).
+constexpr uint8_t kExtraRowInfoNdb = 0;
+constexpr uint8_t kExtraRowInfoPartition = 1;
+// An NDB entry's length byte counts itself and the format byte.
+constexpr uint8_t kExtraRowInfoNdbHeader = 2;
 
 // MariaDB COMPRESSED value header (sql/field_comp.cc): method in the high
 // nibble, bit 3 selects a raw deflate stream, bits 0-2 the original-length width.
@@ -231,14 +242,28 @@ Status DecodeCharacter(const TableMapColumn& column, uint32_t prefix_width, Byte
   return SetPayload(data, length, kind, limits, out);
 }
 
-// A length-prefixed value that is always opaque bytes (JSON, GEOMETRY, VECTOR, TYPED_ARRAY).
+// A length-prefixed value returned as @p kind without interpretation (JSON,
+// GEOMETRY, VECTOR, TYPED_ARRAY).
 Status DecodeOpaque(uint32_t prefix_width, ByteReader* reader, const ValueLimits& limits,
-                    Value* out) {
+                    Value::Kind kind, Value* out) {
   const uint8_t* data = nullptr;
   size_t length = 0;
   const Status status = ReadPrefixed(reader, prefix_width, &data, &length);
   if (status != Status::kOk || out == nullptr) return status;
-  return SetPayload(data, length, Value::Kind::kBytes, limits, out);
+  return SetPayload(data, length, kind, limits, out);
+}
+
+// A PARTIAL_UPDATE_ROWS JSON diff vector, kept with its length prefix.
+Status DecodeJsonDiff(ByteReader* reader, const ValueLimits& limits, Value* out) {
+  uint32_t length = 0;
+  Status status = reader->ReadU32Le(&length);
+  if (status != Status::kOk) return status;
+  const uint8_t* data = nullptr;
+  status = reader->ReadBytes(length, &data);
+  if (status != Status::kOk || out == nullptr) return status;
+  // The payload follows its prefix contiguously.
+  return SetPayload(data - kJsonDiffPrefixWidth, kJsonDiffPrefixWidth + size_t{length},
+                    Value::Kind::kJsonDiff, limits, out);
 }
 
 Status DecodeCompressedColumn(const TableMapColumn& column, uint32_t prefix_width,
@@ -309,11 +334,12 @@ Status DecodeValue(const TableMapColumn& column, ByteReader* reader, const Value
       return DecodeCharacter(column, meta, reader, limits, out);
 
     case ColumnType::kJson:
+      return DecodeOpaque(meta, reader, limits, Value::Kind::kJson, out);
     case ColumnType::kGeometry:
     case ColumnType::kVector:
-      return DecodeOpaque(meta, reader, limits, out);
+      return DecodeOpaque(meta, reader, limits, Value::Kind::kBytes, out);
     case ColumnType::kTypedArray:
-      return DecodeOpaque(kTypedArrayPrefixWidth, reader, limits, out);
+      return DecodeOpaque(kTypedArrayPrefixWidth, reader, limits, Value::Kind::kBytes, out);
 
     case ColumnType::kVarcharCompressed:
       return DecodeCompressedColumn(column, meta > 255 ? 2 : 1, meta, reader, limits, out);
@@ -329,23 +355,50 @@ Status DecodeValue(const TableMapColumn& column, ByteReader* reader, const Value
   return Status::kUnsupported;
 }
 
-bool AllSet(const uint8_t* bitmap, size_t bits) {
-  for (size_t i = 0; i < bits; ++i) {
-    if (!BitmapIsSet(bitmap, i)) return false;
-  }
-  return true;
+size_t CountSet(const uint8_t* bitmap, size_t bits) {
+  size_t count = 0;
+  for (size_t i = 0; i < bits; ++i) count += BitmapIsSet(bitmap, i) ? 1 : 0;
+  return count;
 }
 
 bool Selected(const DecodeOptions& options, size_t ordinal) {
   return options.columns.empty() || (ordinal < options.columns.size() && options.columns[ordinal]);
 }
 
-// One row image: the NULL bitmap, then a value per non-NULL column.
-Status DecodeImage(ByteReader* reader, const TableMap& table, const DecodeOptions& options,
+// The columns one image carries.
+struct ImageColumns {
+  const uint8_t* present = nullptr;  // columns-present bitmap over the TABLE_MAP columns
+  size_t count = 0;                  // set bits in it: the NULL bitmap's width
+};
+
+// A PARTIAL_UPDATE_ROWS after image's value options and, under PARTIAL_JSON,
+// its partial bits (one per JSON column of the table). Upstream
+// start_partial_bit_reader (sql/rpl_record.cc).
+Status ReadValueOptions(ByteReader* reader, size_t json_columns, const uint8_t** partial) {
+  uint64_t options = 0;
+  Status status = reader->ReadPacked(&options);
+  if (status != Status::kOk) return status;
+  if (options > kPartialJsonUpdates) return Status::kInvalidMetadata;
+  *partial = nullptr;
+  if ((options & kPartialJsonUpdates) == 0) return Status::kOk;
+  return reader->ReadBytes(BitmapBytes(json_columns), partial);
+}
+
+// One row image: under @p value_options the PARTIAL_UPDATE_ROWS prefix, then
+// the NULL bitmap over the carried columns, then a value per carried non-NULL
+// column.
+Status DecodeImage(ByteReader* reader, const TableMap& table, const ImageColumns& image,
+                   bool value_options, size_t json_columns, const DecodeOptions& options,
                    Row* row) {
   const size_t columns = table.columns.size();
+  const uint8_t* partial = nullptr;
+  Status status = Status::kOk;
+  if (value_options) {
+    status = ReadValueOptions(reader, json_columns, &partial);
+    if (status != Status::kOk) return status;
+  }
   const uint8_t* nulls = nullptr;
-  Status status = reader->ReadBytes(BitmapBytes(columns), &nulls);
+  status = reader->ReadBytes(BitmapBytes(image.count), &nulls);
   if (status != Status::kOk) return status;
 
   DecodeBudget* budget = options.budget;
@@ -355,17 +408,58 @@ Status DecodeImage(ByteReader* reader, const TableMap& table, const DecodeOption
   }
 
   row->assign(columns, Value{});
+  size_t carried = 0;  // NULL bitmap index
+  size_t json = 0;     // partial bitmap index
   for (size_t i = 0; i < columns; ++i) {
     const TableMapColumn& column = table.columns[i];
     Value& value = (*row)[i];
     value.type = RealType(column);
-    if (BitmapIsSet(nulls, i)) continue;
+    // Every JSON column takes a partial bit, carried or not.
+    const bool is_diff =
+        column.type == ColumnType::kJson && partial != nullptr && BitmapIsSet(partial, json++);
     const bool selected = Selected(options, i);
-    status = DecodeValue(column, reader, LimitsFor(options), selected ? &value : nullptr);
+    if (!BitmapIsSet(image.present, i)) {
+      if (selected) value.kind = Value::Kind::kAbsent;
+      continue;
+    }
+    if (BitmapIsSet(nulls, carried++)) continue;
+    Value* target = selected ? &value : nullptr;
+    status = is_diff ? DecodeJsonDiff(reader, LimitsFor(options), target)
+                     : DecodeValue(column, reader, LimitsFor(options), target);
     if (status != Status::kOk) return status;
     if (selected && budget != nullptr && !budget->Charge(value.bytes.size())) {
       return Status::kLimitExceeded;
     }
+  }
+  return Status::kOk;
+}
+
+// The v2 extra row info (Rows_event::Rows_event in
+// libs/mysql/binlog/event/rows_event.cpp): typed entries until the first type
+// code it does not know, which ends the walk.
+Status ParseExtraRowInfo(const uint8_t* data, size_t size, bool update, RowsEvent* out) {
+  ByteReader reader(data, size);
+  while (reader.remaining() > 0) {
+    uint8_t type = 0;
+    Status status = reader.ReadU8(&type);
+    if (status != Status::kOk) return status;
+    if (type == kExtraRowInfoNdb) {
+      // The length byte counts itself, the format byte and the NDB data.
+      uint8_t length = 0;
+      if (reader.ReadU8(&length) != Status::kOk || length < kExtraRowInfoNdbHeader ||
+          length - 1u > reader.remaining()) {
+        return Status::kInvalidMetadata;
+      }
+      status = reader.Skip(length - 1u);
+    } else if (type == kExtraRowInfoPartition) {
+      if (reader.remaining() < (update ? 4u : 2u)) return Status::kInvalidMetadata;
+      out->has_partition_id = true;
+      status = reader.ReadU16Le(&out->partition_id);
+      if (status == Status::kOk && update) status = reader.ReadU16Le(&out->source_partition_id);
+    } else {
+      return Status::kOk;
+    }
+    if (status != Status::kOk) return status;
   }
   return Status::kOk;
 }
@@ -383,6 +477,7 @@ Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t si
                        const TableMap& table, const DecodeOptions& options, RowsEvent* out) {
   bool v2 = false;
   bool update = false;
+  bool value_options = false;  // after images open with binlog_row_value_options
   switch (static_cast<EventType>(header.type_code)) {
     case EventType::kWriteRowsEventV1:
     case EventType::kDeleteRowsEventV1:
@@ -397,11 +492,15 @@ Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t si
     case EventType::kUpdateRowsEvent:
       v2 = update = true;
       break;
+    case EventType::kPartialUpdateRowsEvent:
+      v2 = update = value_options = true;
+      break;
     default:
       return Status::kUnsupported;
   }
   if (body == nullptr) return Status::kTruncated;
 
+  RowsEvent data;
   ByteReader reader(body, size);
   Status status = reader.Skip(8);  // table_id (6), flags (2)
   if (status != Status::kOk) return status;
@@ -411,7 +510,10 @@ Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t si
     status = reader.ReadU16Le(&extra);
     if (status != Status::kOk) return status;
     if (extra < 2) return Status::kInvalidMetadata;
-    status = reader.Skip(extra - 2u);
+    const uint8_t* info = nullptr;
+    status = reader.ReadBytes(extra - 2u, &info);
+    if (status != Status::kOk) return status;
+    status = ParseExtraRowInfo(info, extra - 2u, update, &data);
     if (status != Status::kOk) return status;
   }
 
@@ -423,32 +525,38 @@ Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t si
     return Status::kInvalidMetadata;
   }
   const size_t columns = static_cast<size_t>(column_count);
+  ImageColumns images[2];
   for (int image = 0; image < (update ? 2 : 1); ++image) {
-    const uint8_t* present = nullptr;
-    status = reader.ReadBytes(BitmapBytes(columns), &present);
+    status = reader.ReadBytes(BitmapBytes(columns), &images[image].present);
     if (status != Status::kOk) return status;
-    if (!AllSet(present, columns)) return Status::kUnsupported;
+    images[image].count = CountSet(images[image].present, columns);
   }
+  const size_t json_columns = static_cast<size_t>(
+      std::count_if(table.columns.begin(), table.columns.end(),
+                    [](const TableMapColumn& c) { return c.type == ColumnType::kJson; }));
 
-  RowsEvent data;
   while (reader.remaining() > 0) {
+    const size_t before = reader.remaining();
     if (update) {
       std::pair<Row, Row> pair;
-      status = DecodeImage(&reader, table, options, &pair.first);
+      status = DecodeImage(&reader, table, images[0], false, json_columns, options, &pair.first);
       if (status != Status::kOk) return status;
-      status = DecodeImage(&reader, table, options, &pair.second);
+      status = DecodeImage(&reader, table, images[1], value_options, json_columns, options,
+                           &pair.second);
       if (status != Status::kOk) return status;
       status = ChargeRow(options);
       if (status != Status::kOk) return status;
       data.updates.push_back(std::move(pair));
     } else {
       Row row;
-      status = DecodeImage(&reader, table, options, &row);
+      status = DecodeImage(&reader, table, images[0], false, json_columns, options, &row);
       if (status != Status::kOk) return status;
       status = ChargeRow(options);
       if (status != Status::kOk) return status;
       data.rows.push_back(std::move(row));
     }
+    // Images that carry no column take no bytes, so the rest cannot be rows.
+    if (reader.remaining() == before) return Status::kInvalidMetadata;
   }
   *out = std::move(data);
   return Status::kOk;

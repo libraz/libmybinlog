@@ -168,7 +168,7 @@ void ExpectJson(const Value& v, ServerFlavor flavor, const std::string& text, ui
     ExpectPayload(v, Value::Kind::kText, text);
     return;
   }
-  ASSERT_EQ(v.kind, Value::Kind::kBytes);
+  ASSERT_EQ(v.kind, Value::Kind::kJson);
   ASSERT_FALSE(v.bytes.empty());
   EXPECT_EQ(static_cast<uint8_t>(v.bytes[0]), binary_type);
 }
@@ -227,7 +227,7 @@ void ExpectRow2(const RowView& r, ServerFlavor flavor) {
     ExpectPayload(r["j"], Value::Kind::kText, "null");
   } else {
     // The JSON null literal: type 0x04, then JSONB_NULL_LITERAL.
-    ExpectPayload(r["j"], Value::Kind::kBytes, std::string{static_cast<char>(kJsonLiteral), 0});
+    ExpectPayload(r["j"], Value::Kind::kJson, std::string{static_cast<char>(kJsonLiteral), 0});
   }
   ExpectInt(r["n"], 7);
 }

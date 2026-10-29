@@ -498,7 +498,7 @@ TEST(CodecRowsValues, OpaquePayloadsAreRawBytes) {
       ASSERT_EQ(DecodeOne(Column(type, width),
                           Writer().Le(3, static_cast<int>(width)).Raw({1, 2, 3}).bytes, &value),
                 Status::kOk);
-      EXPECT_EQ(value.kind, Value::Kind::kBytes);
+      EXPECT_EQ(value.kind, type == ColumnType::kJson ? Value::Kind::kJson : Value::Kind::kBytes);
       EXPECT_EQ(value.bytes, std::string("\x01\x02\x03", 3));
     }
   }
@@ -508,7 +508,7 @@ TEST(CodecRowsValues, OpaquePayloadsAreRawBytes) {
   ASSERT_EQ(DecodeOne(WithCharset(Column(ColumnType::kJson, 4), kTextCollation),
                       Writer().Le(2, 4).Str("{}").bytes, &json),
             Status::kOk);
-  EXPECT_EQ(json.kind, Value::Kind::kBytes);
+  EXPECT_EQ(json.kind, Value::Kind::kJson);
   EXPECT_EQ(json.type, ColumnType::kJson);
 
   const float elements[] = {1.0f, -2.5f, 3.25f};

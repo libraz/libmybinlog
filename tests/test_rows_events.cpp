@@ -160,8 +160,7 @@ TEST(CodecRowsEvent, NonRowsEventTypesAreUnsupported) {
   Writer w = PostHeader();
   w.U8(1).U8(0x01).U8(0x00).Le(7, 4);
   RowsEvent data;
-  const EventType types[] = {EventType::kPartialUpdateRowsEvent,
-                             EventType::kMariaDBWriteRowsCompressedEvent,
+  const EventType types[] = {EventType::kMariaDBWriteRowsCompressedEvent,
                              EventType::kMariaDBUpdateRowsCompressedEventV1,
                              EventType::kTableMapEvent, EventType::kQueryEvent};
   for (EventType type : types) {
@@ -239,36 +238,6 @@ TEST(CodecRowsEvent, BeforeAndAfterImagesKeepTheirOwnNullBitmaps) {
   ASSERT_EQ(data.updates.size(), 1u);
   ExpectImage(data.updates[0].first, kColumns, 0, {1});
   ExpectImage(data.updates[0].second, kColumns, 1, {8});
-}
-
-// --- FULL row image only ---
-
-TEST(CodecRowsEvent, PartialRowImagesAreUnsupported) {
-  RowsEvent data;
-  {
-    SCOPED_TRACE("write image missing column 2");
-    Writer w = PostHeader();
-    w.U8(3).U8(0x03).U8(0x00).Le(42, 4).Le(1, 4);
-    EXPECT_EQ(Decode(EventType::kWriteRowsEvent, w, IntTable(3), &data), Status::kUnsupported);
-  }
-  {
-    SCOPED_TRACE("after image carries only the first column");
-    Writer w = PostHeader();
-    w.U8(2).U8(0x03).U8(0x01).U8(0x00).Le(10, 4).Le(20, 4).U8(0x00).Le(30, 4);
-    EXPECT_EQ(Decode(EventType::kUpdateRowsEvent, w, IntTable(2), &data), Status::kUnsupported);
-  }
-  {
-    SCOPED_TRACE("no columns present, trailing data");
-    Writer w = PostHeader();
-    w.U8(1).U8(0x00).U8(0xAA);
-    EXPECT_EQ(Decode(EventType::kWriteRowsEvent, w, IntTable(1), &data), Status::kUnsupported);
-  }
-  {
-    SCOPED_TRACE("empty after-image bitmap, trailing data");
-    Writer w = PostHeader();
-    w.U8(1).U8(0x01).U8(0x00).U8(0x00).Le(42, 4).U8(0xAA);
-    EXPECT_EQ(Decode(EventType::kUpdateRowsEvent, w, IntTable(1), &data), Status::kUnsupported);
-  }
 }
 
 // --- Column count ---
