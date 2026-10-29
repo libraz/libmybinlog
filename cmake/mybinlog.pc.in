@@ -7,7 +7,6 @@ Name: mybinlog
 Description: Decoder for the MySQL and MariaDB binlog wire format
 URL: https://github.com/libraz/libmybinlog
 Version: @PROJECT_VERSION@
-Libs: -L${libdir} -lmybinlog
-@MYBINLOG_PC_LIBS_PRIVATE@
-@MYBINLOG_PC_REQUIRES_PRIVATE@
+Libs: -L${libdir} -lmybinlog@MYBINLOG_PC_LIBS_EXTRA@
+@MYBINLOG_PC_REQUIRES@
 Cflags: -I${includedir}@MYBINLOG_PC_CFLAGS@

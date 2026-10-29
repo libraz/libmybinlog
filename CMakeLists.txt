@@ -147,16 +147,17 @@ if(MYBINLOG_INSTALL)
   file(RELATIVE_PATH MYBINLOG_PC_PREFIX_FROM_PCDIR
     ${CMAKE_INSTALL_FULL_LIBDIR}/pkgconfig ${CMAKE_INSTALL_PREFIX})
   string(REGEX REPLACE "/$" "" MYBINLOG_PC_PREFIX_FROM_PCDIR "${MYBINLOG_PC_PREFIX_FROM_PCDIR}")
-  set(MYBINLOG_PC_REQUIRES_PRIVATE "")
+  # Only one library type is installed, so a static one lists its dependencies in
+  # Libs/Requires: `pkg-config --libs` must link without --static.
+  set(MYBINLOG_PC_CFLAGS "")
+  set(MYBINLOG_PC_LIBS_EXTRA "")
+  set(MYBINLOG_PC_REQUIRES "")
   if(MYBINLOG_STATIC)
     set(MYBINLOG_PC_CFLAGS " -DMYBINLOG_STATIC_DEFINE")
-    set(MYBINLOG_PC_LIBS_PRIVATE "Libs.private: -lz")
+    set(MYBINLOG_PC_LIBS_EXTRA " -lz")
     if(MYBINLOG_ZSTD_FOUND_VIA)
-      set(MYBINLOG_PC_REQUIRES_PRIVATE "Requires.private: libzstd")
+      set(MYBINLOG_PC_REQUIRES "Requires: libzstd")
     endif()
-  else()
-    set(MYBINLOG_PC_CFLAGS "")
-    set(MYBINLOG_PC_LIBS_PRIVATE "")
   endif()
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/mybinlog.pc.in
     ${CMAKE_CURRENT_BINARY_DIR}/mybinlog.pc @ONLY)
