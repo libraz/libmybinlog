@@ -76,7 +76,9 @@ Status SetPayload(const uint8_t* data, size_t length, Value::Kind kind, const Va
                   Value* out) {
   if (length > limits.value) return Status::kLimitExceeded;
   out->kind = kind;
-  out->bytes.assign(reinterpret_cast<const char*>(data), length);
+  // Constructed, not assign()ed: assign() is an out-of-line libc++ call even
+  // for a short string.
+  out->bytes = std::string(reinterpret_cast<const char*>(data), length);
   return Status::kOk;
 }
 
@@ -417,22 +419,27 @@ Status DecodeImage(ByteReader* reader, const TableMap& table, const ImageColumns
 
   DecodeBudget* budget = options.budget;
   if (budget != nullptr && options.per_value_overhead != 0) {
-    if (columns > budget->Remaining() / options.per_value_overhead) return Status::kLimitExceeded;
-    budget->Charge(columns * options.per_value_overhead);
+    // columns <= kMaxTableColumns, so below this overhead the product cannot
+    // wrap and Charge() decides alone; the division is kept for the rest.
+    constexpr size_t kUnwrappedOverhead = std::numeric_limits<size_t>::max() / kMaxTableColumns;
+    if (options.per_value_overhead <= kUnwrappedOverhead) {
+      if (!budget->Charge(columns * options.per_value_overhead)) return Status::kLimitExceeded;
+    } else {
+      if (columns > budget->Remaining() / options.per_value_overhead) return Status::kLimitExceeded;
+      budget->Charge(columns * options.per_value_overhead);
+    }
   }
 
-  // A reused image is reset in place; assigning Value{} per column copies each
-  // string out of line.
-  if (row->size() == columns) {
-    for (Value& value : *row) ResetValue(&value);
-  } else {
-    row->assign(columns, Value{});
-  }
+  // A reused image is reset column by column as it is decoded, so each value is
+  // touched once; assigning Value{} per column copies each string out of line.
+  const bool reused = row->size() == columns;
+  if (!reused) row->assign(columns, Value{});
   size_t carried = 0;  // NULL bitmap index
   size_t json = 0;     // partial bitmap index
   for (size_t i = 0; i < columns; ++i) {
     const TableMapColumn& column = table.columns[i];
     Value& value = (*row)[i];
+    if (reused) ResetValue(&value);
     // Only a STRING column can be an ENUM or SET; RealType() is not inlined here.
     value.type = column.type == ColumnType::kString ? RealType(column) : column.type;
     // Every JSON column takes a partial bit, carried or not.

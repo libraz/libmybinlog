@@ -125,7 +125,8 @@ Status DecodeDecimal(uint32_t meta, const uint8_t* data, std::string* out) {
       end = WritePadded(end, group, layout.frac_rest);
     }
   }
-  out->assign(text, static_cast<size_t>(end - text));
+  // Constructed, not assign()ed: assign() is an out-of-line libc++ call.
+  *out = std::string(text, static_cast<size_t>(end - text));
   return Status::kOk;
 }
 

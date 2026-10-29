@@ -1,7 +1,7 @@
 #include "mybinlog/checksum.h"
 
 #include "bytes_internal.h"
-#include "mybinlog/crc32.h"
+#include "crc32_internal.h"
 
 namespace mybinlog {
 
@@ -11,7 +11,7 @@ constexpr size_t kMinChecksummedFrame = kEventHeaderSize + kChecksumSize;
 
 bool TrailerMatches(const uint8_t* frame, size_t size) {
   const size_t data_length = size - kChecksumSize;
-  return ComputeCrc32(frame, data_length) == ReadU32Le(frame + data_length);
+  return internal::Crc32Update(0, frame, data_length) == ReadU32Le(frame + data_length);
 }
 
 }  // namespace

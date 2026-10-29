@@ -37,8 +37,9 @@ const char* DispositionName(Disposition disposition) noexcept {
   return "kUnknown";
 }
 
-EventDisposition ClassifyEvent(EventType type, ServerFlavor flavor) noexcept {
-  const bool maria = flavor == ServerFlavor::kMariaDB;
+namespace {
+
+constexpr EventDisposition Classify(EventType type, bool maria) noexcept {
   switch (type) {
     // Decoded and applied.
     case EventType::kQueryEvent:
@@ -149,9 +150,37 @@ EventDisposition ClassifyEvent(EventType type, ServerFlavor flavor) noexcept {
   return Closed(kOutsideEnumeration);
 }
 
+// Classify() of every type code, built at compile time so a per-event lookup is
+// one load rather than a call through the switch.
+struct DispositionTable {
+  EventDisposition entries[256];
+};
+
+constexpr DispositionTable BuildTable(bool maria) noexcept {
+  DispositionTable table{};
+  for (unsigned code = 0; code < 256; ++code) {
+    table.entries[code] = Classify(static_cast<EventType>(code), maria);
+  }
+  return table;
+}
+
+constexpr DispositionTable kMySqlDispositions = BuildTable(false);
+constexpr DispositionTable kMariaDbDispositions = BuildTable(true);
+
+const EventDisposition& Lookup(uint8_t type_code, ServerFlavor flavor) noexcept {
+  return (flavor == ServerFlavor::kMariaDB ? kMariaDbDispositions : kMySqlDispositions)
+      .entries[type_code];
+}
+
+}  // namespace
+
+EventDisposition ClassifyEvent(EventType type, ServerFlavor flavor) noexcept {
+  return Lookup(static_cast<uint8_t>(type), flavor);
+}
+
 EventDisposition ClassifyEvent(uint8_t type_code, uint16_t flags, ServerFlavor flavor) noexcept {
   // Code 0 is a real enumerator; every other unnamed code is outside EventType.
-  const EventDisposition disposition = ClassifyEvent(static_cast<EventType>(type_code), flavor);
+  const EventDisposition& disposition = Lookup(type_code, flavor);
   if (disposition.reason != kOutsideEnumeration) return disposition;
   if ((flags & kLogEventIgnorableFlag) != 0) {
     return Neutral("unrecognized type marked ignorable by the source");
