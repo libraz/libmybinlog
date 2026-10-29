@@ -16,6 +16,7 @@
 #include "mybinlog/format_description.h"
 #include "mybinlog/heartbeat.h"
 #include "mybinlog/json.h"
+#include "mybinlog/json_diff.h"
 #include "mybinlog/mariadb_gtid.h"
 #include "mybinlog/mysql_gtid.h"
 #include "mybinlog/query_event.h"
