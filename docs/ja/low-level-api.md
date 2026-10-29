@@ -41,6 +41,8 @@ Status ParseXxx(const EventHeader& header, const uint8_t* body, size_t size, Xxx
 
 `ParseTableMapEvent()` がサーバーの種類を受け取るのは、2 つのサーバーで文字セットのメタデータが対象とする列の範囲が異なるためです（MariaDB は GEOMETRY を文字列の列として数えます）。`QueryEvent` は、サーバーと同じく、パーサが知らない最初のコードまでのステータス変数を報告します。途中で止まったときは `status_vars_complete` が false です。
 
+壊れたイベントを報告したり許容したりする呼び出し側のために、2 つの変種があります。`ParseTableMapEventWithDiagnostics()` は `TableMapDiagnostics` を埋めます。未知の型の列があればその番号と型コードを入れ、optional metadata のブロックだけが失敗したときはそのことを示す印と、それより前に読めたテーブル ID・名前・列を返します。これで、行をデコードしないテーブルを読み飛ばせます。`ParseQueryEventWithPolicy()` に `StatusVarPolicy::kStopAtMalformed` を渡すと、読めないステータス変数で、未知のコードと同じく読み取りを止め、文は返します。文の位置はポストヘッダの長さだけで決まるためです。
+
 ## ファイルを手で走査する
 
 次の関数は、メモリ上にある binlog ファイル 1 つ全体を走査し、行イベントをデコードします。ファイルに対してデコーダが行う処理から、圧縮とストリーミング用のバッファを除いたものにほぼ相当します。

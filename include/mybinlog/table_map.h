@@ -109,6 +109,38 @@ struct TableMap {
                                                      size_t size, ServerFlavor flavor,
                                                      TableMap* out);
 
+/** @brief Where ParseTableMapEvent() failed, for callers that report or tolerate it. */
+struct TableMapDiagnostics {
+  /**
+   * Only the optional-metadata block failed: every field before it parsed and
+   * the TableMap passed with the diagnostics holds them, without optional fields.
+   */
+  bool in_optional_metadata = false;
+  size_t column = 0;      ///< kUnsupported: index of the first column of unknown type.
+  uint8_t type_code = 0;  ///< kUnsupported: that column's wire type code.
+};
+
+/**
+ * @brief Parse a TABLE_MAP_EVENT body like ParseTableMapEvent(), reporting where it failed.
+ *
+ * On a failure inside the optional-metadata block, @p out receives the table id,
+ * names and columns parsed before it (no optional fields) and
+ * @p diagnostics->in_optional_metadata is set, so a caller that does not need
+ * those fields for this table can carry on. On any other failure @p out is
+ * untouched.
+ *
+ * @param header Header of the event; not consulted by the current layout.
+ * @param body Bytes after the common header.
+ * @param size Body length, checksum trailer excluded.
+ * @param flavor Server flavor; decides which columns the charset fields index.
+ * @param[out] out Filled on kOk and on an optional-metadata failure.
+ * @param[out] diagnostics Reset, then filled on failure; must not be null.
+ * @return As ParseTableMapEvent(). Reentrant.
+ */
+[[nodiscard]] MYBINLOG_API Status ParseTableMapEventWithDiagnostics(
+    const EventHeader& header, const uint8_t* body, size_t size, ServerFlavor flavor, TableMap* out,
+    TableMapDiagnostics* diagnostics);
+
 }  // namespace mybinlog
 
 #endif  // MYBINLOG_TABLE_MAP_H_

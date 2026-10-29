@@ -153,8 +153,13 @@ Status ReadStatusVar(ByteReader* vars, QueryEvent* event, bool* stop) {
 
 }  // namespace
 
-Status ParseQueryEvent(const EventHeader& /*header*/, const uint8_t* body, size_t size,
+Status ParseQueryEvent(const EventHeader& header, const uint8_t* body, size_t size,
                        QueryEvent* out) {
+  return ParseQueryEventWithPolicy(header, body, size, out, StatusVarPolicy::kStrict);
+}
+
+Status ParseQueryEventWithPolicy(const EventHeader& /*header*/, const uint8_t* body, size_t size,
+                                 QueryEvent* out, StatusVarPolicy policy) {
   if (body == nullptr || size < kPostHeaderSize) return Status::kTruncated;
   QueryEvent event;
   event.thread_id = ReadU32Le(body);
@@ -170,11 +175,16 @@ Status ParseQueryEvent(const EventHeader& /*header*/, const uint8_t* body, size_
 
   ByteReader vars(status_vars, status_vars_length);
   bool stop = false;
+  bool malformed = false;
   while (!stop && vars.remaining() > 0) {
     status = WithinBlock(ReadStatusVar(&vars, &event, &stop));
+    if (status == Status::kInvalidMetadata && policy == StatusVarPolicy::kStopAtMalformed) {
+      malformed = true;
+      break;
+    }
     if (status != Status::kOk) return status;
   }
-  if (!stop) event.status_vars_complete = true;
+  if (!stop && !malformed) event.status_vars_complete = true;
 
   // Schema, its NUL, then the statement to the end of the body.
   const uint8_t* schema = nullptr;

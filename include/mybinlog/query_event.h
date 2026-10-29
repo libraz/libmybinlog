@@ -58,6 +58,33 @@ struct QueryEvent {
 [[nodiscard]] MYBINLOG_API Status ParseQueryEvent(const EventHeader& header, const uint8_t* body,
                                                   size_t size, QueryEvent* out);
 
+/** @brief How ParseQueryEvent() treats a status variable it cannot read. */
+enum class StatusVarPolicy : uint8_t {
+  kStrict,           ///< Fail with kInvalidMetadata, as ParseQueryEvent() does.
+  kStopAtMalformed,  ///< End the walk there, like an unknown code; the statement is still read.
+};
+
+/**
+ * @brief Parse a QUERY_EVENT body, choosing how an unreadable status variable is treated.
+ *
+ * The statement's position comes from the post-header lengths alone, so under
+ * kStopAtMalformed a status variable that runs past the block or is malformed
+ * ends the walk with #QueryEvent::status_vars_complete false, and the schema
+ * and statement are read as usual.
+ *
+ * @param header Header of the event; not consulted by the current layout.
+ * @param body Bytes after the common header.
+ * @param size Body length, checksum trailer excluded.
+ * @param[out] out Filled on kOk; untouched otherwise.
+ * @param policy Treatment of an unreadable status variable.
+ * @return kOk; kTruncated when the body ends early (or @p body is null);
+ *   kInvalidMetadata under kStrict as ParseQueryEvent() returns. Reentrant.
+ */
+[[nodiscard]] MYBINLOG_API Status ParseQueryEventWithPolicy(const EventHeader& header,
+                                                            const uint8_t* body, size_t size,
+                                                            QueryEvent* out,
+                                                            StatusVarPolicy policy);
+
 }  // namespace mybinlog
 
 #endif  // MYBINLOG_QUERY_EVENT_H_

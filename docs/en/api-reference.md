@@ -21,7 +21,7 @@ This page maps the public headers. The declarations and their Doxygen comments i
 | `checksum.h` | `ChecksumAlgorithm`, `ChecksumTracker`, `FrameLayout`, `ReadFdeChecksumAlgorithm()` | [Checksums](checksums.md) |
 | `crc32.h` | `ComputeCrc32()`, `UpdateCrc32()` | [Checksums](checksums.md) |
 | `format_description.h` | `FormatDescriptionEvent`, `ParseFormatDescriptionEvent()` | [Checksums](checksums.md) |
-| `table_map.h` | `TableMap`, `TableMapColumn`, `ParseTableMapEvent()`, `RealType()` | [Rows](rows.md) |
+| `table_map.h` | `TableMap`, `TableMapColumn`, `ParseTableMapEvent()`, `ParseTableMapEventWithDiagnostics()`, `TableMapDiagnostics`, `RealType()` | [Rows](rows.md) |
 | `row_decoder.h` | `RowsEvent`, `Row`, `DecodeOptions`, `DecodeBudget`, `DecodeRowsEvent()`, `RowScratch`, `RowVisitorFn`, `VisitRowsEvent()`, `RowsEventHeader`, `ParseRowsEventHeader()`, `kRowsStatementEndFlag`, `kDummyTableId` | [Rows](rows.md) |
 | `value.h` | `Value`, `Temporal`, `ValueKindName()` | [Values](values.md) |
 | `format.h` | `FormatValue()`, `FormatEnumLabel()`, `FormatSetLabels()` | [Values](values.md) |
@@ -30,7 +30,7 @@ This page maps the public headers. The declarations and their Doxygen comments i
 | `compression.h` | `HasZstdSupport()`, `DecompressMariaDbEvent()`, `ParseTransactionPayloadEvent()`, `DecompressTransactionPayload()`, `NextPayloadEvent()` | [Compressed events](compression.md) |
 | `mysql_gtid.h` | `GtidSet`, `GtidEvent`, `PreviousGtidsEvent`, `ParseGtidEvent()`, UUID helpers | [GTIDs](gtids.md) |
 | `mariadb_gtid.h` | `MariaDbGtid`, `MariaDbGtidPosition`, `PositionCovers()`, MariaDB GTID, GTID_LIST and ANNOTATE_ROWS events | [GTIDs](gtids.md) |
-| `query_event.h` | `QueryEvent`, `ParseQueryEvent()` | [Low-level API](low-level-api.md) |
+| `query_event.h` | `QueryEvent`, `ParseQueryEvent()`, `ParseQueryEventWithPolicy()`, `StatusVarPolicy` | [Low-level API](low-level-api.md) |
 | `rotate.h`, `xid.h`, `heartbeat.h` | ROTATE, XID and heartbeat bodies and parsers | [Low-level API](low-level-api.md) |
 | `disposition.h` | `Disposition`, `ClassifyEvent()` | [Event disposition](disposition.md) |
 | `server_settings.h` | `RuleId`, `kServerSettingRules`, `EvaluateServerSettings()` | [Server settings](server-settings.md) |

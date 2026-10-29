@@ -258,6 +258,23 @@ TEST(CodecQueryEvent, NullBodyIsTruncated) {
   EXPECT_EQ(ParseQueryEvent(QueryHeader(), nullptr, 64, &event), Status::kTruncated);
 }
 
+TEST(CodecQueryEvent, StopAtMalformedStillReadsTheStatement) {
+  // Q_SQL_MODE_CODE, then Q_CHARSET_CODE cut short by the block's end.
+  Bytes vars = kSqlModeVar;
+  vars.insert(vars.end(), {0x04, 0x21, 0x00});
+  const Bytes body = QueryBody(vars, "db", "ALTER TABLE t ADD c INT");
+  QueryEvent event;
+  ASSERT_EQ(Parse(body, &event), Status::kInvalidMetadata);
+  ASSERT_EQ(ParseQueryEventWithPolicy(QueryHeader(), body.data(), body.size(), &event,
+                                      StatusVarPolicy::kStopAtMalformed),
+            Status::kOk);
+  EXPECT_EQ(event.schema, "db");
+  EXPECT_EQ(event.query, "ALTER TABLE t ADD c INT");
+  EXPECT_TRUE(event.has_sql_mode);
+  EXPECT_FALSE(event.has_charset);
+  EXPECT_FALSE(event.status_vars_complete);
+}
+
 TEST(CodecQueryEvent, OutputUntouchedOnFailure) {
   QueryEvent event;
   event.query = "kept";

@@ -41,6 +41,8 @@ Helpers: `EventTypeName()` gives the server's name for a type code, `IsRowsEvent
 
 `ParseTableMapEvent()` takes the flavor because the two servers index character-set metadata over different column subsets (MariaDB counts GEOMETRY as a character column). `QueryEvent` reports the status variables up to the first code the parser does not know, as the servers do; `status_vars_complete` is false when it stopped early.
 
+Two variants serve callers that report or tolerate a bad event. `ParseTableMapEventWithDiagnostics()` fills a `TableMapDiagnostics`: the index and type code of an unknown column, or, when only the optional-metadata block failed, a flag together with the table id, names and columns parsed before it, so a reader can skip a table it does not decode. `ParseQueryEventWithPolicy()` with `StatusVarPolicy::kStopAtMalformed` ends the status-variable walk at a variable it cannot read, as at an unknown code, and still returns the statement, whose position the post-header lengths fix on their own.
+
 ## Walking a file by hand
 
 The function below walks one whole binlog file held in memory and decodes its rows events. It is roughly what the decoder does for a file, minus compression, without the streaming buffer.

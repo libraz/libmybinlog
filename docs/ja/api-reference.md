@@ -21,7 +21,7 @@
 | `checksum.h` | `ChecksumAlgorithm`、`ChecksumTracker`、`FrameLayout`、`ReadFdeChecksumAlgorithm()` | [チェックサム](checksums.md) |
 | `crc32.h` | `ComputeCrc32()`、`UpdateCrc32()` | [チェックサム](checksums.md) |
 | `format_description.h` | `FormatDescriptionEvent`、`ParseFormatDescriptionEvent()` | [チェックサム](checksums.md) |
-| `table_map.h` | `TableMap`、`TableMapColumn`、`ParseTableMapEvent()`、`RealType()` | [行](rows.md) |
+| `table_map.h` | `TableMap`、`TableMapColumn`、`ParseTableMapEvent()`、`ParseTableMapEventWithDiagnostics()`、`TableMapDiagnostics`、`RealType()` | [行](rows.md) |
 | `row_decoder.h` | `RowsEvent`、`Row`、`DecodeOptions`、`DecodeBudget`、`DecodeRowsEvent()`、`RowScratch`、`RowVisitorFn`、`VisitRowsEvent()`、`RowsEventHeader`、`ParseRowsEventHeader()`、`kRowsStatementEndFlag`、`kDummyTableId` | [行](rows.md) |
 | `value.h` | `Value`、`Temporal`、`ValueKindName()` | [値](values.md) |
 | `format.h` | `FormatValue()`、`FormatEnumLabel()`、`FormatSetLabels()` | [値](values.md) |
@@ -30,7 +30,7 @@
 | `compression.h` | `HasZstdSupport()`、`DecompressMariaDbEvent()`、`ParseTransactionPayloadEvent()`、`DecompressTransactionPayload()`、`NextPayloadEvent()` | [圧縮イベント](compression.md) |
 | `mysql_gtid.h` | `GtidSet`、`GtidEvent`、`PreviousGtidsEvent`、`ParseGtidEvent()`、UUID の補助関数 | [GTID](gtids.md) |
 | `mariadb_gtid.h` | `MariaDbGtid`、`MariaDbGtidPosition`、`PositionCovers()`、MariaDB の GTID・GTID_LIST・ANNOTATE_ROWS イベント | [GTID](gtids.md) |
-| `query_event.h` | `QueryEvent`、`ParseQueryEvent()` | [低レベル API](low-level-api.md) |
+| `query_event.h` | `QueryEvent`、`ParseQueryEvent()`、`ParseQueryEventWithPolicy()`、`StatusVarPolicy` | [低レベル API](low-level-api.md) |
 | `rotate.h`、`xid.h`、`heartbeat.h` | ROTATE、XID、ハートビートの本体とパーサ | [低レベル API](low-level-api.md) |
 | `disposition.h` | `Disposition`、`ClassifyEvent()` | [イベントの扱い](disposition.md) |
 | `server_settings.h` | `RuleId`、`kServerSettingRules`、`EvaluateServerSettings()` | [サーバー設定](server-settings.md) |

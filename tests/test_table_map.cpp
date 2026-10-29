@@ -654,6 +654,42 @@ TEST(CodecTableMapRules, UnknownColumnTypeIsUnsupported) {
   }
 }
 
+TEST(CodecTableMapRules, DiagnosticsNameTheFirstUnknownColumn) {
+  const TableMapBuilder b = Columns({T(ColumnType::kLong), 0x15, 0x06}, {});
+  TableMap map;
+  TableMapDiagnostics diagnostics;
+  EXPECT_EQ(ParseTableMapEventWithDiagnostics(TableMapHeader(), b.Data().data(), b.Size(),
+                                              ServerFlavor::kMySQL, &map, &diagnostics),
+            Status::kUnsupported);
+  EXPECT_FALSE(diagnostics.in_optional_metadata);
+  EXPECT_EQ(diagnostics.column, 1u);
+  EXPECT_EQ(diagnostics.type_code, 0x15);
+}
+
+TEST(CodecTableMapRules, OptionalMetadataFailureStillYieldsTheFixedPart) {
+  TableMapBuilder b = Columns({T(ColumnType::kLong), T(ColumnType::kLongLong)}, {});
+  b.WriteField(kColumnName, {0x02, 'i', 'd', 0x01, 'n'});
+  b.WriteField(kSignedness, {});  // truncated bitmap
+
+  TableMap map;
+  TableMapDiagnostics diagnostics;
+  EXPECT_EQ(ParseTableMapEventWithDiagnostics(TableMapHeader(), b.Data().data(), b.Size(),
+                                              ServerFlavor::kMySQL, &map, &diagnostics),
+            Status::kInvalidMetadata);
+  EXPECT_TRUE(diagnostics.in_optional_metadata);
+  EXPECT_EQ(map.table, "t");
+  ASSERT_EQ(map.columns.size(), 2u);
+  EXPECT_EQ(map.columns[1].type, ColumnType::kLongLong);
+  // Fields the failed block had already set are not handed back.
+  EXPECT_FALSE(map.has_column_names);
+  EXPECT_EQ(map.columns[0].name, "");
+
+  TableMap untouched;
+  untouched.table = "kept";
+  EXPECT_EQ(Parse(b, &untouched), Status::kInvalidMetadata);
+  EXPECT_EQ(untouched.table, "kept");
+}
+
 TEST(CodecTableMapRules, VarStringMetadataIsRealTypeThenLength) {
   // Field_string::do_save_field_metadata writes VAR_STRING like CHAR.
   TableMapBuilder b = Columns({T(ColumnType::kVarString)}, {0xFD, 0x20});

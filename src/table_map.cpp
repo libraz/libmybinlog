@@ -371,8 +371,20 @@ ColumnType RealType(const TableMapColumn& column) noexcept {
   return column.type;
 }
 
-Status ParseTableMapEvent(const EventHeader& /*header*/, const uint8_t* body, size_t size,
+Status ParseTableMapEvent(const EventHeader& header, const uint8_t* body, size_t size,
                           ServerFlavor flavor, TableMap* out) {
+  TableMapDiagnostics diagnostics;
+  TableMap map;
+  const Status status =
+      ParseTableMapEventWithDiagnostics(header, body, size, flavor, &map, &diagnostics);
+  if (status == Status::kOk) *out = std::move(map);
+  return status;
+}
+
+Status ParseTableMapEventWithDiagnostics(const EventHeader& /*header*/, const uint8_t* body,
+                                         size_t size, ServerFlavor flavor, TableMap* out,
+                                         TableMapDiagnostics* diagnostics) {
+  *diagnostics = TableMapDiagnostics{};
   if (body == nullptr) return Status::kTruncated;
   ByteReader reader(body, size);
   TableMap map;
@@ -409,6 +421,10 @@ Status ParseTableMapEvent(const EventHeader& /*header*/, const uint8_t* body, si
   for (size_t i = 0; i < columns; ++i) {
     map.columns[i].type = static_cast<ColumnType>(types[i]);
     status = WithinBlock(ReadColumnMeta(&block, &map.columns[i]));
+    if (status == Status::kUnsupported) {
+      diagnostics->column = i;
+      diagnostics->type_code = types[i];
+    }
     if (status != Status::kOk) return status;
   }
   // Upstream table_def requires the block to be consumed exactly.
@@ -420,7 +436,20 @@ Status ParseTableMapEvent(const EventHeader& /*header*/, const uint8_t* body, si
   for (size_t i = 0; i < columns; ++i) map.columns[i].nullable = BitmapIsSet(null_bitmap, i);
 
   status = ParseOptionalMetadata(reader, flavor, &map);
-  if (status != Status::kOk) return status;
+  if (status != Status::kOk) {
+    // Hand back what the fixed part described, without fields the block set.
+    for (TableMapColumn& column : map.columns) {
+      column.is_unsigned = false;
+      column.has_charset = false;
+      column.charset = 0;
+      column.name.clear();
+      column.labels.clear();
+    }
+    map.has_signedness = map.has_column_names = map.has_enum_labels = map.has_set_labels = false;
+    diagnostics->in_optional_metadata = true;
+    *out = std::move(map);
+    return status;
+  }
   *out = std::move(map);
   return Status::kOk;
 }
