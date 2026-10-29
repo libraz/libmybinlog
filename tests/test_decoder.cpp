@@ -4,10 +4,8 @@
 // expansion; TABLE_MAP lifetime; streams without the binlog magic.
 
 #include <gtest/gtest.h>
-#include <zlib.h>
 
 #include <algorithm>
-#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -15,10 +13,10 @@
 #include <iterator>
 #include <random>
 #include <string>
-#include <system_error>
 #include <variant>
 #include <vector>
 
+#include "matrix_replay.h"
 #include "mybinlog/compression.h"
 #include "mybinlog/crc32.h"
 #include "mybinlog/decoder.h"
@@ -45,18 +43,6 @@ const char* const kFixtures[] = {"mysql84_none_tagged", "mysql84_crc32_tagged",
 Bytes ReadFixture(const std::string& name) {
   std::ifstream in(FixtureDir() / (name + ".bin"), std::ios::binary);
   return Bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-}
-
-bool Gunzip(const fs::path& path, Bytes* out) {
-  gzFile file = gzopen(path.string().c_str(), "rb");
-  if (file == nullptr) return false;
-  out->clear();
-  uint8_t chunk[1 << 16];
-  int n = 0;
-  while ((n = gzread(file, chunk, sizeof(chunk))) > 0) out->insert(out->end(), chunk, chunk + n);
-  const bool ok = n == 0;
-  gzclose(file);
-  return ok && !out->empty();
 }
 
 uint32_t ReadU32(const uint8_t* p) {
@@ -632,42 +618,10 @@ TEST(CodecDecoder, DummyTableIdNeedsNoTableMap) {
 
 // ---- Version matrix ---------------------------------------------------------------
 
-fs::path MatrixRoot() { return FixtureDir() / "matrix"; }
-
-struct MatrixConfig {
-  std::string version;
-  std::string config;
-};
-
-void PrintTo(const MatrixConfig& config, std::ostream* os) {
-  *os << config.version << "/" << config.config;
-}
-
-std::vector<MatrixConfig> DiscoverConfigs() {
-  std::vector<MatrixConfig> configs;
-  std::error_code ec;
-  for (fs::directory_iterator v(MatrixRoot(), ec), end; !ec && v != end; v.increment(ec)) {
-    if (!v->is_directory(ec)) continue;
-    for (fs::directory_iterator c(v->path(), ec); !ec && c != end; c.increment(ec)) {
-      if (!c->is_directory(ec)) continue;
-      configs.push_back({v->path().filename().string(), c->path().filename().string()});
-    }
-  }
-  std::sort(configs.begin(), configs.end(), [](const MatrixConfig& a, const MatrixConfig& b) {
-    return a.version + "/" + a.config < b.version + "/" + b.config;
-  });
-  return configs;
-}
+using matrix::MatrixConfig;
 
 std::vector<fs::path> BinlogFiles(const MatrixConfig& config) {
-  std::vector<fs::path> files;
-  std::error_code ec;
-  for (fs::directory_iterator it(MatrixRoot() / config.version / config.config, ec), end;
-       !ec && it != end; it.increment(ec)) {
-    if (it->path().filename().string().rfind("binlog.", 0) == 0) files.push_back(it->path());
-  }
-  std::sort(files.begin(), files.end());
-  return files;
+  return matrix::BinlogFiles(config.dir());
 }
 
 class CodecDecoderMatrix : public testing::TestWithParam<MatrixConfig> {};
@@ -678,7 +632,7 @@ TEST_P(CodecDecoderMatrix, SplitsAgree) {
   for (const fs::path& path : files) {
     SCOPED_TRACE(path.string());
     Bytes file;
-    ASSERT_TRUE(Gunzip(path, &file));
+    ASSERT_TRUE(matrix::ReadGzip(path, &file));
     const DecodeRun whole = DecodeWhole(file);
     if (whole.status == Status::kUnsupported && !HasZstdSupport()) {
       EXPECT_NE(whole.error.message.find("TRANSACTION_PAYLOAD"), std::string::npos);
@@ -701,7 +655,7 @@ TEST_P(CodecDecoderMatrix, CompressedEventsExpandInOrder) {
   for (const fs::path& path : BinlogFiles(config)) {
     SCOPED_TRACE(path.string());
     Bytes file;
-    ASSERT_TRUE(Gunzip(path, &file));
+    ASSERT_TRUE(matrix::ReadGzip(path, &file));
     std::vector<std::string> expected;  // "offset type" of every event after expansion
     size_t compressed = 0;
     for (const Frame& frame : Frames(file)) {
@@ -755,16 +709,8 @@ TEST_P(CodecDecoderMatrix, CompressedEventsExpandInOrder) {
   }
 }
 
-std::string ConfigName(const testing::TestParamInfo<MatrixConfig>& info) {
-  std::string name = info.param.version + "__" + info.param.config;
-  for (char& c : name) {
-    if (!std::isalnum(static_cast<unsigned char>(c))) c = '_';
-  }
-  return name;
-}
-
-INSTANTIATE_TEST_SUITE_P(CodecDecoder, CodecDecoderMatrix, testing::ValuesIn(DiscoverConfigs()),
-                         ConfigName);
+INSTANTIATE_TEST_SUITE_P(CodecDecoder, CodecDecoderMatrix,
+                         testing::ValuesIn(matrix::DiscoverConfigs()), matrix::ConfigTestName);
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(CodecDecoderMatrix);
 
 }  // namespace

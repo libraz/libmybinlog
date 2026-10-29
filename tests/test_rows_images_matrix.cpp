@@ -5,20 +5,16 @@
 // Values are not compared with expected.jsonl here.
 
 #include <gtest/gtest.h>
-#include <zlib.h>
 
-#include <algorithm>
-#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <map>
-#include <ostream>
 #include <string>
-#include <system_error>
 #include <vector>
 
 #include "bytes_internal.h"
+#include "matrix_replay.h"
 #include "mybinlog/checksum.h"
 #include "mybinlog/compression.h"
 #include "mybinlog/event_header.h"
@@ -32,84 +28,41 @@ namespace mybinlog {
 namespace {
 
 namespace fs = std::filesystem;
-using Bytes = std::vector<uint8_t>;
+using matrix::Bytes;
+using matrix::MatrixConfig;
 
 constexpr size_t kNoLimit = std::numeric_limits<size_t>::max();
 
-fs::path MatrixRoot() { return fs::path(__FILE__).parent_path() / "fixtures" / "matrix"; }
-
 // Directory name: <checksum>_<row image>_meta<metadata>_<compression>[_<pjson>].
-struct MatrixConfig {
-  std::string version;
-  std::string config;
-  ServerFlavor flavor = ServerFlavor::kMySQL;
+struct ImageConfig {
   std::string image;  // "full", "minimal" or "noblob"
   bool partial_json = false;
 };
 
-void PrintTo(const MatrixConfig& config, std::ostream* os) {
-  *os << config.version << "/" << config.config;
-}
-
-std::vector<std::string> Split(const std::string& s) {
+ImageConfig ParseConfigName(const std::string& config) {
   std::vector<std::string> parts;
   size_t start = 0;
   while (true) {
-    const size_t end = s.find('_', start);
-    parts.push_back(s.substr(start, end - start));
-    if (end == std::string::npos) return parts;
+    const size_t end = config.find('_', start);
+    parts.push_back(config.substr(start, end - start));
+    if (end == std::string::npos) break;
     start = end + 1;
   }
+  ImageConfig out;
+  if (parts.size() >= 4) {
+    out.image = parts[1];
+    out.partial_json = parts.size() > 4 && parts[4] == "pjson";
+  }
+  return out;
 }
 
+// Configurations whose directory name carries at least the four fixed fields.
 std::vector<MatrixConfig> DiscoverConfigs() {
-  std::vector<MatrixConfig> configs;
-  std::error_code ec;
-  for (fs::directory_iterator v(MatrixRoot(), ec), end; !ec && v != end; v.increment(ec)) {
-    if (!v->is_directory(ec)) continue;
-    for (fs::directory_iterator c(v->path(), ec); !ec && c != end; c.increment(ec)) {
-      if (!c->is_directory(ec)) continue;
-      MatrixConfig config;
-      config.version = v->path().filename().string();
-      config.config = c->path().filename().string();
-      config.flavor =
-          config.version.rfind("mariadb", 0) == 0 ? ServerFlavor::kMariaDB : ServerFlavor::kMySQL;
-      const std::vector<std::string> parts = Split(config.config);
-      if (parts.size() < 4) continue;
-      config.image = parts[1];
-      config.partial_json = parts.size() > 4 && parts[4] == "pjson";
-      configs.push_back(config);
-    }
+  std::vector<MatrixConfig> out;
+  for (const MatrixConfig& config : matrix::DiscoverConfigs()) {
+    if (!ParseConfigName(config.config).image.empty()) out.push_back(config);
   }
-  std::sort(configs.begin(), configs.end(), [](const MatrixConfig& a, const MatrixConfig& b) {
-    return a.version + "/" + a.config < b.version + "/" + b.config;
-  });
-  return configs;
-}
-
-std::vector<fs::path> BinlogFiles(const fs::path& dir) {
-  std::vector<fs::path> files;
-  std::error_code ec;
-  for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
-    const std::string name = it->path().filename().string();
-    if (name.rfind("binlog.", 0) == 0 && it->path().extension() == ".gz") {
-      files.push_back(it->path());
-    }
-  }
-  std::sort(files.begin(), files.end());
-  return files;
-}
-
-bool ReadGzip(const fs::path& path, Bytes* out) {
-  gzFile file = gzopen(path.string().c_str(), "rb");
-  if (file == nullptr) return false;
-  out->clear();
-  uint8_t chunk[1 << 16];
-  int n = 0;
-  while ((n = gzread(file, chunk, sizeof(chunk))) > 0) out->insert(out->end(), chunk, chunk + n);
-  const bool ok = n == 0;
-  gzclose(file);
-  return ok && !out->empty();
+  return out;
 }
 
 struct Counts {
@@ -121,13 +74,13 @@ struct Counts {
 
 class Walker {
  public:
-  Walker(const MatrixConfig& config, Counts* counts) : config_(config), counts_(counts) {}
+  Walker(const MatrixConfig& config, Counts* counts) : flavor_(config.flavor()), counts_(counts) {}
 
   void Plain(const EventHeader& header, const uint8_t* body, size_t size) {
     const auto type = static_cast<EventType>(header.type_code);
     if (type == EventType::kTableMapEvent) {
       TableMap map;
-      ASSERT_EQ(ParseTableMapEvent(header, body, size, config_.flavor, &map), Status::kOk);
+      ASSERT_EQ(ParseTableMapEvent(header, body, size, flavor_, &map), Status::kOk);
       tables_[map.table_id] = map;
       return;
     }
@@ -185,7 +138,7 @@ class Walker {
     for (const Value& value : row) ++counts_->kinds[value.kind];
   }
 
-  const MatrixConfig& config_;
+  ServerFlavor flavor_;
   Counts* counts_;
   std::map<uint64_t, TableMap> tables_;
 };
@@ -194,13 +147,14 @@ class CodecRowsMatrix : public testing::TestWithParam<MatrixConfig> {};
 
 TEST_P(CodecRowsMatrix, DecodesEveryRowsEvent) {
   const MatrixConfig& config = GetParam();
-  const std::vector<fs::path> files = BinlogFiles(MatrixRoot() / config.version / config.config);
+  const ImageConfig image = ParseConfigName(config.config);
+  const std::vector<fs::path> files = matrix::BinlogFiles(config.dir());
   ASSERT_FALSE(files.empty());
   Counts counts;
   for (const fs::path& path : files) {
     SCOPED_TRACE(path.string());
     Bytes file;
-    ASSERT_TRUE(ReadGzip(path, &file));
+    ASSERT_TRUE(matrix::ReadGzip(path, &file));
     ASSERT_GE(file.size(), kBinlogMagicOffset);
     ChecksumTracker tracker;
     Walker walker(config, &counts);
@@ -231,36 +185,28 @@ TEST_P(CodecRowsMatrix, DecodesEveryRowsEvent) {
   EXPECT_GT(counts.rows_events, 0u);
 
   const size_t absent = counts.kinds[Value::Kind::kAbsent];
-  if (config.image == "full") {
+  if (image.image == "full") {
     EXPECT_EQ(absent, 0u);
   } else {
     EXPECT_GT(absent, 0u);
   }
   const size_t diffs = counts.kinds[Value::Kind::kJsonDiff];
-  if (config.partial_json) {
+  if (image.partial_json) {
     EXPECT_GT(counts.partial_events, 0u);
     EXPECT_GT(diffs, 0u);
   } else {
     EXPECT_EQ(counts.partial_events, 0u);
     EXPECT_EQ(diffs, 0u);
   }
-  if (config.flavor == ServerFlavor::kMariaDB) {
+  if (config.flavor() == ServerFlavor::kMariaDB) {
     EXPECT_EQ(counts.kinds[Value::Kind::kJson], 0u);  // MariaDB JSON is LONGTEXT
   } else {
     EXPECT_GT(counts.kinds[Value::Kind::kJson], 0u);
   }
 }
 
-std::string ConfigName(const testing::TestParamInfo<MatrixConfig>& info) {
-  std::string name = info.param.version + "__" + info.param.config;
-  for (char& c : name) {
-    if (!std::isalnum(static_cast<unsigned char>(c))) c = '_';
-  }
-  return name;
-}
-
 INSTANTIATE_TEST_SUITE_P(CodecRowsImages, CodecRowsMatrix, testing::ValuesIn(DiscoverConfigs()),
-                         ConfigName);
+                         matrix::ConfigTestName);
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(CodecRowsMatrix);
 
 }  // namespace

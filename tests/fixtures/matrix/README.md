@@ -118,7 +118,7 @@ for every tag.
 |---|---|---|---|
 | `int` | TINYINT .. BIGINT, signed and unsigned | `col` | number; BIGINT UNSIGNED needs a uint64 parse |
 | `decimal_text` | DECIMAL | `CAST(col AS CHAR)` | string with exactly `scale` fraction digits; negative zero is stored as zero |
-| `float` | FLOAT, DOUBLE | `col` | number; FLOAT is printed after widening to double, so compare as `float(value)`; `-0.0` is kept |
+| `float` | FLOAT, DOUBLE | `col` | number. MySQL prints FLOAT after widening to double, so compare as `float(value)`, and keeps `-0.0`. MariaDB prints FLOAT with 6 significant digits and negative zero as `0` |
 | `bit_uint` | BIT(n) | `CAST(col AS UNSIGNED)` | number, uint64 |
 | `ordinal` | ENUM, SET | `CAST(col AS UNSIGNED)` | ENUM 1-based index (0 for the invalid `''`), SET bitmask as uint64 |
 | `year_int` | YEAR | `col+0` | number (0 for 0000) |

@@ -4,19 +4,17 @@
 // a table its JSON column must match the next snapshot in expected.jsonl.gz.
 
 #include <gtest/gtest.h>
-#include <zlib.h>
 
-#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <map>
 #include <optional>
 #include <set>
 #include <string>
-#include <system_error>
 #include <vector>
 
 #include "bytes_internal.h"
+#include "matrix_replay.h"
 #include "mybinlog/checksum.h"
 #include "mybinlog/event_header.h"
 #include "mybinlog/event_types.h"
@@ -30,233 +28,27 @@ namespace mybinlog {
 namespace {
 
 namespace fs = std::filesystem;
-using Bytes = std::vector<uint8_t>;
+using matrix::Bytes;
 // id -> JSON text, or nullopt for SQL NULL.
 using TableState = std::map<int64_t, std::optional<std::string>>;
 
 const std::set<std::string> kJsonTables = {"t_json", "t_big"};
 
-bool Gunzip(const fs::path& path, Bytes* out) {
-  gzFile file = gzopen(path.string().c_str(), "rb");
-  if (file == nullptr) return false;
-  uint8_t buf[1 << 16];
-  int n = 0;
-  while ((n = gzread(file, buf, sizeof(buf))) > 0) out->insert(out->end(), buf, buf + n);
-  const bool ok = n == 0;
-  gzclose(file);
-  return ok;
-}
-
-// ---- Minimal JSON reader for expected.jsonl -------------------------------
-
-struct Node {
-  enum class Type { kNull, kBool, kNumber, kString, kArray, kObject } type = Type::kNull;
-  std::string text;  // kNumber: literal; kString: decoded UTF-8
-  std::vector<Node> items;
-  std::vector<std::pair<std::string, Node>> members;
-
-  const Node* Get(const std::string& key) const {
-    for (const auto& m : members) {
-      if (m.first == key) return &m.second;
-    }
-    return nullptr;
-  }
-};
-
-class Reader {
- public:
-  explicit Reader(const std::string& s) : s_(s) {}
-
-  bool Parse(Node* out) {
-    if (!ParseValue(out)) return false;
-    Skip();
-    return pos_ == s_.size();
-  }
-
- private:
-  void Skip() {
-    while (pos_ < s_.size() &&
-           (s_[pos_] == ' ' || s_[pos_] == '\n' || s_[pos_] == '\r' || s_[pos_] == '\t')) {
-      ++pos_;
-    }
-  }
-
-  bool Literal(const char* word) {
-    const std::string w(word);
-    if (s_.compare(pos_, w.size(), w) != 0) return false;
-    pos_ += w.size();
-    return true;
-  }
-
-  static void AppendUtf8(uint32_t cp, std::string* out) {
-    if (cp < 0x80) {
-      out->push_back(static_cast<char>(cp));
-    } else if (cp < 0x800) {
-      out->push_back(static_cast<char>(0xC0 | (cp >> 6)));
-      out->push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-    } else if (cp < 0x10000) {
-      out->push_back(static_cast<char>(0xE0 | (cp >> 12)));
-      out->push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-      out->push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-    } else {
-      out->push_back(static_cast<char>(0xF0 | (cp >> 18)));
-      out->push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
-      out->push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-      out->push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-    }
-  }
-
-  bool Hex4(uint32_t* cp) {
-    if (pos_ + 4 > s_.size()) return false;
-    *cp = 0;
-    for (int i = 0; i < 4; ++i) {
-      const char c = s_[pos_++];
-      const int digit = c >= '0' && c <= '9'   ? c - '0'
-                        : c >= 'a' && c <= 'f' ? c - 'a' + 10
-                        : c >= 'A' && c <= 'F' ? c - 'A' + 10
-                                               : -1;
-      if (digit < 0) return false;
-      *cp = *cp * 16 + static_cast<uint32_t>(digit);
-    }
-    return true;
-  }
-
-  bool String(std::string* out) {
-    if (s_[pos_] != '"') return false;
-    ++pos_;
-    while (pos_ < s_.size() && s_[pos_] != '"') {
-      const char c = s_[pos_++];
-      if (c != '\\') {
-        out->push_back(c);
-        continue;
-      }
-      if (pos_ >= s_.size()) return false;
-      const char e = s_[pos_++];
-      switch (e) {
-        case 'b':
-          out->push_back('\b');
-          break;
-        case 'f':
-          out->push_back('\f');
-          break;
-        case 'n':
-          out->push_back('\n');
-          break;
-        case 'r':
-          out->push_back('\r');
-          break;
-        case 't':
-          out->push_back('\t');
-          break;
-        case 'u': {
-          uint32_t cp = 0;
-          if (!Hex4(&cp)) return false;
-          if (cp >= 0xD800 && cp < 0xDC00) {
-            uint32_t low = 0;
-            if (!Literal("\\u") || !Hex4(&low)) return false;
-            cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
-          }
-          AppendUtf8(cp, out);
-          break;
-        }
-        default:
-          out->push_back(e);
-          break;
-      }
-    }
-    if (pos_ >= s_.size()) return false;
-    ++pos_;
-    return true;
-  }
-
-  bool ParseValue(Node* out) {
-    Skip();
-    if (pos_ >= s_.size()) return false;
-    const char c = s_[pos_];
-    if (c == '{') {
-      out->type = Node::Type::kObject;
-      ++pos_;
-      Skip();
-      if (s_[pos_] == '}') return ++pos_, true;
-      while (true) {
-        Skip();
-        std::pair<std::string, Node> member;
-        if (!String(&member.first)) return false;
-        Skip();
-        if (s_[pos_++] != ':') return false;
-        if (!ParseValue(&member.second)) return false;
-        out->members.push_back(std::move(member));
-        Skip();
-        if (s_[pos_] == ',') {
-          ++pos_;
-          continue;
-        }
-        return s_[pos_++] == '}';
-      }
-    }
-    if (c == '[') {
-      out->type = Node::Type::kArray;
-      ++pos_;
-      Skip();
-      if (s_[pos_] == ']') return ++pos_, true;
-      while (true) {
-        out->items.emplace_back();
-        if (!ParseValue(&out->items.back())) return false;
-        Skip();
-        if (s_[pos_] == ',') {
-          ++pos_;
-          continue;
-        }
-        return s_[pos_++] == ']';
-      }
-    }
-    if (c == '"') {
-      out->type = Node::Type::kString;
-      return String(&out->text);
-    }
-    if (Literal("null")) return out->type = Node::Type::kNull, true;
-    if (Literal("true")) return out->type = Node::Type::kBool, out->text = "true", true;
-    if (Literal("false")) return out->type = Node::Type::kBool, out->text = "false", true;
-    out->type = Node::Type::kNumber;
-    const size_t start = pos_;
-    while (pos_ < s_.size() && std::string("+-0123456789.eE").find(s_[pos_]) != std::string::npos) {
-      ++pos_;
-    }
-    out->text = s_.substr(start, pos_ - start);
-    return pos_ > start;
-  }
-
-  const std::string& s_;
-  size_t pos_ = 0;
-};
-
 // Snapshots of each JSON table, in transaction order.
 bool ReadSnapshots(const fs::path& path, std::map<std::string, std::vector<TableState>>* out) {
-  Bytes raw;
-  if (!Gunzip(path, &raw)) return false;
-  const std::string all(raw.begin(), raw.end());
-  size_t start = 0;
-  while (start < all.size()) {
-    size_t end = all.find('\n', start);
-    if (end == std::string::npos) end = all.size();
-    const std::string line = all.substr(start, end - start);
-    start = end + 1;
-    if (line.empty()) continue;
-    Node node;
-    if (!Reader(line).Parse(&node)) return false;
-    const Node* table = node.Get("table");
-    const Node* rows = node.Get("rows");
-    if (table == nullptr || rows == nullptr) return false;
-    if (kJsonTables.count(table->text) == 0) continue;
+  std::vector<matrix::ExpectedSnapshot> lines;
+  if (!matrix::ReadExpected(path, &lines)) return false;
+  for (const matrix::ExpectedSnapshot& line : lines) {
+    if (kJsonTables.count(line.table) == 0) continue;
     TableState state;
-    for (const Node& row : rows->items) {
-      const Node* id = row.Get("id");
-      const Node* j = row.Get("j");
+    for (const matrix::JsonNode& row : line.rows) {
+      const matrix::JsonNode* id = row.Get("id");
+      const matrix::JsonNode* j = row.Get("j");
       if (id == nullptr || j == nullptr) return false;
       state[std::stoll(id->text)] =
-          j->type == Node::Type::kNull ? std::nullopt : std::optional<std::string>(j->text);
+          j->is_null() ? std::nullopt : std::optional<std::string>(j->text);
     }
-    (*out)[table->text].push_back(std::move(state));
+    (*out)[line.table].push_back(std::move(state));
   }
   return true;
 }
@@ -364,21 +156,14 @@ void ReplayFile(const Bytes& file, const std::map<std::string, std::vector<Table
 }
 
 std::vector<fs::path> FullImageConfigs() {
-  const fs::path root = fs::path(__FILE__).parent_path() / "fixtures" / "matrix";
   std::vector<fs::path> out;
-  std::error_code ec;
-  for (fs::directory_iterator v(root, ec), end; !ec && v != end; v.increment(ec)) {
-    if (v->path().filename().string().rfind("mysql-", 0) != 0) continue;
-    std::error_code inner;
-    for (fs::directory_iterator c(v->path(), inner); !inner && c != end; c.increment(inner)) {
-      const std::string name = c->path().filename().string();
-      if (name.find("_full_") != std::string::npos && name.find("_nozstd_") != std::string::npos &&
-          name.find("_nopjson") != std::string::npos) {
-        out.push_back(c->path());
-      }
+  for (const matrix::MatrixConfig& config : matrix::DiscoverConfigs()) {
+    const std::string& name = config.config;
+    if (config.version.rfind("mysql-", 0) == 0 && name.find("_full_") != std::string::npos &&
+        name.find("_nozstd_") != std::string::npos && name.find("_nopjson") != std::string::npos) {
+      out.push_back(config.dir());
     }
   }
-  std::sort(out.begin(), out.end());
   return out;
 }
 
@@ -391,18 +176,13 @@ TEST(CodecJsonMatrix, ServerCastText) {
     ASSERT_TRUE(ReadSnapshots(config / "expected.jsonl.gz", &expected));
     ASSERT_EQ(expected.count("t_json"), 1u);
 
-    std::vector<fs::path> binlogs;
-    std::error_code ec;
-    for (fs::directory_iterator f(config, ec), end; !ec && f != end; f.increment(ec)) {
-      if (f->path().filename().string().rfind("binlog.", 0) == 0) binlogs.push_back(f->path());
-    }
-    std::sort(binlogs.begin(), binlogs.end());
+    const std::vector<fs::path> binlogs = matrix::BinlogFiles(config);
     ASSERT_FALSE(binlogs.empty());
 
     Replay replay;
     for (const fs::path& binlog : binlogs) {
       Bytes file;
-      ASSERT_TRUE(Gunzip(binlog, &file)) << binlog;
+      ASSERT_TRUE(matrix::ReadGzip(binlog, &file)) << binlog;
       ReplayFile(file, expected, &replay);
       if (HasFatalFailure()) return;
     }

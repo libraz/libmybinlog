@@ -1,7 +1,7 @@
 file(GLOB MYBINLOG_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/test_*.cpp)
 
-add_executable(mybinlog_tests ${MYBINLOG_TEST_SOURCES})
-# ZLIB: test_rows_compressed.cpp deflates its own payloads.
+add_executable(mybinlog_tests ${MYBINLOG_TEST_SOURCES} matrix_replay.cpp)
+# ZLIB: test_rows_compressed.cpp deflates its own payloads; matrix_replay.cpp inflates fixtures.
 target_link_libraries(mybinlog_tests PRIVATE mybinlog::mybinlog ZLIB::ZLIB GTest::gtest_main)
 # Tests may include the header-only internal helpers under src/.
 target_include_directories(mybinlog_tests PRIVATE ${PROJECT_SOURCE_DIR}/src)

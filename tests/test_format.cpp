@@ -5,9 +5,7 @@
 // normalization is `CAST(col AS CHAR)`.
 
 #include <gtest/gtest.h>
-#include <zlib.h>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -15,10 +13,10 @@
 #include <map>
 #include <set>
 #include <string>
-#include <system_error>
 #include <variant>
 #include <vector>
 
+#include "matrix_replay.h"
 #include "mybinlog/decoder.h"
 #include "mybinlog/event.h"
 #include "mybinlog/format.h"
@@ -30,7 +28,7 @@ namespace mybinlog {
 namespace {
 
 namespace fs = std::filesystem;
-using Bytes = std::vector<uint8_t>;
+using matrix::Bytes;
 using Kind = Value::Kind;
 
 std::string Format(const Value& value) {
@@ -278,33 +276,11 @@ TEST(CodecFormat, EnumAndSetLabels) {
 
 // ---- Matrix ground truth ----------------------------------------------------
 
-fs::path MatrixRoot() { return fs::path(__FILE__).parent_path() / "fixtures" / "matrix"; }
-
-bool Gunzip(const fs::path& path, Bytes* out) {
-  gzFile file = gzopen(path.string().c_str(), "rb");
-  if (file == nullptr) return false;
-  out->clear();
-  uint8_t chunk[1 << 16];
-  int n = 0;
-  while ((n = gzread(file, chunk, sizeof(chunk))) > 0) out->insert(out->end(), chunk, chunk + n);
-  const bool ok = n == 0;
-  gzclose(file);
-  return ok;
-}
-
 std::vector<fs::path> FullMetadataConfigs() {
   std::vector<fs::path> dirs;
-  std::error_code ec;
-  for (fs::directory_iterator v(MatrixRoot(), ec), end; !ec && v != end; v.increment(ec)) {
-    if (!v->is_directory(ec)) continue;
-    for (fs::directory_iterator c(v->path(), ec); !ec && c != end; c.increment(ec)) {
-      if (c->is_directory(ec) &&
-          c->path().filename().string().find("_metafull_") != std::string::npos) {
-        dirs.push_back(c->path());
-      }
-    }
+  for (const matrix::MatrixConfig& config : matrix::DiscoverConfigs()) {
+    if (config.config.find("_metafull_") != std::string::npos) dirs.push_back(config.dir());
   }
-  std::sort(dirs.begin(), dirs.end());
   return dirs;
 }
 
@@ -368,16 +344,14 @@ TEST(CodecFormat, MatchesServerCastTextOnTheMatrix) {
     SCOPED_TRACE(dir.string());
     const bool mysql = dir.parent_path().filename().string().rfind("mysql", 0) == 0;
     Bytes expected_bytes;
-    ASSERT_TRUE(Gunzip(dir / "expected.jsonl.gz", &expected_bytes));
+    ASSERT_TRUE(matrix::ReadGzip(dir / "expected.jsonl.gz", &expected_bytes));
     Expected expected;
     CollectExpected(std::string(expected_bytes.begin(), expected_bytes.end()), &expected);
     ASSERT_FALSE(expected.empty());
 
-    std::error_code ec;
-    for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
-      if (it->path().filename().string().rfind("binlog.", 0) != 0) continue;
+    for (const fs::path& binlog : matrix::BinlogFiles(dir)) {
       Bytes file;
-      ASSERT_TRUE(Gunzip(it->path(), &file));
+      ASSERT_TRUE(matrix::ReadGzip(binlog, &file));
       Decoder decoder;
       decoder.Feed(file.data(), file.size());
       Event event;
