@@ -8,12 +8,14 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <string>
 #include <system_error>
 #include <vector>
 
 #include "mybinlog/checksum.h"
 #include "mybinlog/event_header.h"
 #include "mybinlog/event_types.h"
+#include "mybinlog/format_description.h"
 #include "mybinlog/rotate.h"
 
 namespace mybinlog {
@@ -52,7 +54,7 @@ void WalkFixture(const FixtureCase& fixture, bool verify) {
   Bytes file;
   ASSERT_TRUE(ReadFixture(fixture.file, &file));
   ASSERT_GE(file.size(), kBinlogMagicOffset);
-  ASSERT_EQ(std::memcmp(file.data(), kBinlogMagic, sizeof(kBinlogMagic)), 0);
+  ASSERT_EQ(std::memcmp(file.data(), kBinlogMagic.data(), kBinlogMagic.size()), 0);
 
   ChecksumTracker tracker;  // Raw-file consumer: default framing until the FDE.
   tracker.SetVerify(verify);
@@ -99,7 +101,7 @@ void WalkFixture(const FixtureCase& fixture, bool verify) {
   ASSERT_EQ(last.type_code, static_cast<uint8_t>(EventType::kRotateEvent));
   RotateEvent rotate;
   const size_t rotate_offset = file.size() - last.event_length;
-  ASSERT_EQ(ParseRotateEvent(file.data() + rotate_offset + kEventHeaderSize,
+  ASSERT_EQ(ParseRotateEvent(last, file.data() + rotate_offset + kEventHeaderSize,
                              last_layout.body_length(), &rotate),
             Status::kOk);
   EXPECT_EQ(rotate.position, kBinlogMagicOffset);
@@ -135,6 +137,36 @@ TEST(CodecFixtures, FdeAlgorithmMatchesFileName) {
     const bool named_crc32 = std::strstr(fixture.file, "_crc32") != nullptr;
     EXPECT_EQ(declared, named_crc32 ? ChecksumAlgorithm::kCrc32 : ChecksumAlgorithm::kOff);
     EXPECT_EQ(declared, fixture.algorithm);
+  }
+}
+
+// Each FDE, framed by ChecksumTracker, parses to the writer's description.
+TEST(CodecFixtures, FormatDescriptionParsesEveryFixture) {
+  for (const FixtureCase& fixture : kFixtures) {
+    SCOPED_TRACE(fixture.file);
+    Bytes file;
+    ASSERT_TRUE(ReadFixture(fixture.file, &file));
+    const uint8_t* frame = file.data() + kBinlogMagicOffset;
+    EventHeader header;
+    ASSERT_EQ(ParseEventHeader(frame, file.size() - kBinlogMagicOffset, &header), Status::kOk);
+    ChecksumTracker tracker;
+    FrameLayout layout;
+    ASSERT_EQ(tracker.OnEvent(header, frame, header.event_length, &layout), Status::kOk);
+    FormatDescriptionEvent fde;
+    ASSERT_EQ(
+        ParseFormatDescriptionEvent(header, frame + kEventHeaderSize, layout.body_length(), &fde),
+        Status::kOk);
+    EXPECT_EQ(fde.binlog_version, 4);
+    EXPECT_EQ(fde.common_header_length, kEventHeaderSize);
+    EXPECT_EQ(fde.checksum_algorithm, fixture.algorithm);
+    EXPECT_EQ(fde.server_version.find("MariaDB") != std::string::npos, fixture.mariadb)
+        << fde.server_version;
+    const auto post_header = [&fde](EventType type) {
+      return fde.post_header_lengths.at(static_cast<size_t>(type) - 1);
+    };
+    ASSERT_GE(fde.post_header_lengths.size(), static_cast<size_t>(EventType::kTableMapEvent));
+    EXPECT_EQ(post_header(EventType::kQueryEvent), 13);
+    EXPECT_EQ(post_header(EventType::kTableMapEvent), 8);
   }
 }
 

@@ -11,12 +11,14 @@
 #ifndef MYBINLOG_SERVER_SETTINGS_H_
 #define MYBINLOG_SERVER_SETTINGS_H_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "mybinlog/export.h"
 #include "mybinlog/server_flavor.h"
 
 namespace mybinlog {
@@ -47,30 +49,45 @@ enum class RuleMatch : uint8_t {
 
 /** @brief One static rule. */
 struct ServerSettingRule {
-  RuleId id;
-  bool applies_to_mysql;
-  bool applies_to_mariadb;
-  const char* mysql_variable;    ///< Variable queried on MySQL; null if the rule is MariaDB-only.
-  const char* mariadb_variable;  ///< Variable queried on MariaDB; null if the rule is MySQL-only.
-  RuleMatch match;
-  const char* value;     ///< Comparison operand (e.g. "ON", "PARTIAL_JSON").
-  const char* expected;  ///< Human-readable requirement for messages.
+  RuleId id = RuleId::kLogBin;      ///< This rule's identifier.
+  bool applies_to_mysql = false;    ///< Evaluated against MySQL sources.
+  bool applies_to_mariadb = false;  ///< Evaluated against MariaDB sources.
+  /** Variable queried on MySQL; null if the rule is MariaDB-only. */
+  const char* mysql_variable = nullptr;
+  /** Variable queried on MariaDB; null if the rule is MySQL-only. */
+  const char* mariadb_variable = nullptr;
+  RuleMatch match = RuleMatch::kEquals;  ///< How the value is judged.
+  const char* value = "";                ///< Comparison operand (e.g. "ON", "PARTIAL_JSON").
+  const char* expected = "";             ///< Human-readable requirement for messages.
 };
 
-/** @brief Rules in RuleId order: kServerSettingRules[i].id == static_cast<RuleId>(i). */
-extern const ServerSettingRule kServerSettingRules[kRuleCount];
+/**
+ * @brief Every rule, in RuleId order: `kServerSettingRules[i].id == static_cast<RuleId>(i)`.
+ *
+ * Immutable; safe to read from any thread.
+ */
+extern MYBINLOG_API const std::array<ServerSettingRule, kRuleCount> kServerSettingRules;
 
-/** @brief Rule for @p id. */
-const ServerSettingRule& GetRule(RuleId id) noexcept;
+/**
+ * @brief Look up one rule.
+ * @param id A RuleId enumerator.
+ * @return The rule in kServerSettingRules. Reentrant.
+ */
+[[nodiscard]] MYBINLOG_API const ServerSettingRule& GetRule(RuleId id) noexcept;
 
-/** @brief Stable identifier of @p id (e.g. "kLogBin"). */
-const char* RuleIdName(RuleId id) noexcept;
+/**
+ * @brief Stable identifier of a rule, for logs and messages.
+ * @param id Any value, including one outside the enumerators.
+ * @return Static string such as "kLogBin" ("" outside the enumerators); never
+ *   null. Reentrant.
+ */
+[[nodiscard]] MYBINLOG_API const char* RuleIdName(RuleId id) noexcept;
 
 /**
  * @brief Read one server variable.
  *
  * @param ctx Caller context passed through EvaluateServerSettings().
- * @param variable Variable name, e.g. "log_bin".
+ * @param variable Variable name, e.g. "log_bin"; valid only during the call.
  * @param value Receives the value when the variable exists.
  * @return true when the variable exists, false when absent.
  */
@@ -78,11 +95,11 @@ using VariableLookupFn = bool (*)(void* ctx, std::string_view variable, std::str
 
 /** @brief A rule the server's settings do not satisfy. */
 struct Violation {
-  RuleId id;
-  std::string variable;  ///< Variable that was checked (flavor-specific name).
-  std::string observed;  ///< Value read; empty when absent.
-  bool absent;           ///< The variable does not exist on the server.
-  const char* expected;  ///< Static requirement text from the rule.
+  RuleId id = RuleId::kLogBin;  ///< The rule that failed.
+  std::string variable;         ///< Variable that was checked (flavor-specific name).
+  std::string observed;         ///< Value read; empty when absent.
+  bool absent = false;          ///< The variable does not exist on the server.
+  const char* expected = "";    ///< Static requirement text from the rule.
 };
 
 /**
@@ -97,11 +114,11 @@ struct Violation {
  * @param ids Rules to evaluate.
  * @param id_count Number of entries in @p ids.
  * @param violations Appended to; must not be null.
- * @return Number of violations appended.
+ * @return Number of violations appended. Reentrant when @p lookup is.
  */
-size_t EvaluateServerSettings(VariableLookupFn lookup, void* ctx, ServerFlavor flavor,
-                              const RuleId* ids, size_t id_count,
-                              std::vector<Violation>* violations);
+MYBINLOG_API size_t EvaluateServerSettings(VariableLookupFn lookup, void* ctx, ServerFlavor flavor,
+                                           const RuleId* ids, size_t id_count,
+                                           std::vector<Violation>* violations);
 
 }  // namespace mybinlog
 

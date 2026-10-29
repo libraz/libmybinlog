@@ -14,6 +14,8 @@
 #include <optional>
 #include <string_view>
 
+#include "mybinlog/export.h"
+
 namespace mybinlog {
 
 /** @brief Database server flavor. */
@@ -22,16 +24,23 @@ enum class ServerFlavor : uint8_t {
   kMariaDB,  ///< MariaDB.
 };
 
-/** @brief "MySQL" or "MariaDB". */
-const char* ServerFlavorName(ServerFlavor flavor) noexcept;
+/**
+ * @brief Display name of a flavor.
+ * @param flavor Any value, including one outside the enumerators.
+ * @return "MySQL", "MariaDB", or "Unknown"; never null. Reentrant.
+ */
+[[nodiscard]] MYBINLOG_API const char* ServerFlavorName(ServerFlavor flavor) noexcept;
 
 /**
  * @brief Flavor from a server version string.
  *
  * MariaDB versions contain "MariaDB" (or "mariadb"); anything else, including
  * an empty string, is MySQL.
+ *
+ * @param version Handshake or `VERSION()` text; only read during the call.
+ * @return The detected flavor. Reentrant.
  */
-ServerFlavor DetectFlavorFromVersion(std::string_view version) noexcept;
+[[nodiscard]] MYBINLOG_API ServerFlavor DetectFlavorFromVersion(std::string_view version) noexcept;
 
 /** @brief MySQL ER_UNKNOWN_SYSTEM_VARIABLE, the probe's answer on MySQL. */
 inline constexpr unsigned int kErUnknownSystemVariable = 1193;
@@ -44,9 +53,10 @@ inline constexpr unsigned int kErUnknownSystemVariable = 1193;
  * @param error_number Server error number when the query failed.
  * @return kMariaDB when the query and its result succeeded; kMySQL when the
  *   query failed with kErUnknownSystemVariable; std::nullopt otherwise.
+ *   Reentrant.
  */
-std::optional<ServerFlavor> ClassifyFlavorProbe(bool query_succeeded, bool result_read_succeeded,
-                                                unsigned int error_number) noexcept;
+[[nodiscard]] MYBINLOG_API std::optional<ServerFlavor> ClassifyFlavorProbe(
+    bool query_succeeded, bool result_read_succeeded, unsigned int error_number) noexcept;
 
 }  // namespace mybinlog
 

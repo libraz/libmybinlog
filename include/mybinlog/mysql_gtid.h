@@ -8,6 +8,9 @@
  * uses. Text "uuid:5" and "uuid:tag:5" parse as the single GTID 5; widening a
  * bare N to "1-N" is a resume convention left to each product. Tags follow
  * upstream: lower-cased, `[a-z_][a-z0-9_]{0,31}`.
+ *
+ * Thread safety: the free functions and static members are reentrant; a
+ * GtidSet may be read concurrently but not mutated concurrently.
  */
 
 #ifndef MYBINLOG_MYSQL_GTID_H_
@@ -22,6 +25,7 @@
 #include <vector>
 
 #include "mybinlog/event_header.h"
+#include "mybinlog/export.h"
 #include "mybinlog/status.h"
 
 namespace mybinlog {
@@ -37,36 +41,45 @@ inline constexpr uint64_t kGnoEnd = 0x7FFFFFFFFFFFFFFFULL;
 
 /**
  * @brief Validate a tag and write its lower-cased form.
+ * @param text Candidate tag; only read during the call.
+ * @param[out] out Filled on kOk; untouched otherwise.
  * @return kOk, or kMalformedValue when @p text is not a tag (empty included).
  */
-Status NormalizeGtidTag(std::string_view text, std::string* out);
+[[nodiscard]] MYBINLOG_API Status NormalizeGtidTag(std::string_view text, std::string* out);
 
 /**
  * @brief Parse an 8-4-4-4-12 hex UUID, either case, no surrounding whitespace.
+ * @param text UUID text; only read during the call.
+ * @param[out] out Filled on kOk; untouched otherwise.
  * @return kOk, or kMalformedValue.
  */
-Status ParseUuid(std::string_view text, Uuid* out);
+[[nodiscard]] MYBINLOG_API Status ParseUuid(std::string_view text, Uuid* out);
 
-/** @brief Lower-case 8-4-4-4-12 text of @p uuid. */
-std::string FormatUuid(const Uuid& uuid);
+/**
+ * @brief Format a UUID.
+ * @param uuid Raw UUID.
+ * @return Lower-case 8-4-4-4-12 text.
+ */
+[[nodiscard]] MYBINLOG_API std::string FormatUuid(const Uuid& uuid);
 
 /** @brief Canonical MySQL GTID set, for resume positions and checkpoints. */
-class GtidSet {
+class MYBINLOG_API GtidSet {
  public:
   /** @brief Transaction source: UUID plus tag (empty when untagged). */
   struct Tsid {
-    Uuid uuid{};
-    std::string tag;
+    Uuid uuid{};      ///< Source server UUID.
+    std::string tag;  ///< Lower-cased tag; empty when untagged.
 
-    bool operator<(const Tsid& other) const {
+    /** @return Ordering by UUID, then tag. */
+    [[nodiscard]] bool operator<(const Tsid& other) const {
       return uuid < other.uuid || (uuid == other.uuid && tag < other.tag);
     }
   };
 
   /** @brief GNO range [start, end). */
   struct Interval {
-    uint64_t start = 0;
-    uint64_t end = 0;
+    uint64_t start = 0;  ///< First GNO in the range.
+    uint64_t end = 0;    ///< One past the last GNO.
   };
 
   /** @brief Most intervals one TSID may hold; bounds memory for untrusted input. */
@@ -79,39 +92,55 @@ class GtidSet {
    * text holding no entry at all (",", whitespace) is rejected, as is any empty
    * colon piece, a tag without intervals, or a GNO outside [1, INT64_MAX).
    *
+   * @param text Set text; only read during the call.
+   * @param[out] out Filled on kOk; untouched otherwise.
    * @return kOk; kMalformedValue for malformed text; kLimitExceeded when a TSID
-   *   exceeds kMaxIntervalsPerTsid. @p out is untouched on failure.
+   *   exceeds kMaxIntervalsPerTsid.
    */
-  static Status Parse(std::string_view text, GtidSet* out);
+  [[nodiscard]] static Status Parse(std::string_view text, GtidSet* out);
 
   /**
    * @brief Decode the binary encoding (PREVIOUS_GTIDS body, format 0 or 1).
-   * @return kOk; kTruncated when the declared counts do not fit; kUnsupported
-   *   for an unknown format; kMalformedValue for an invalid interval, tag or
-   *   trailing bytes; kLimitExceeded past kMaxIntervalsPerTsid.
+   * @param data First byte of the encoding.
+   * @param size Bytes of the encoding; all must be consumed.
+   * @param[out] out Filled on kOk; untouched otherwise.
+   * @return kOk; kTruncated when the declared counts do not fit (or @p data is
+   *   null); kUnsupported for an unknown format; kMalformedValue for an invalid
+   *   interval, tag or trailing bytes; kLimitExceeded past kMaxIntervalsPerTsid.
    */
-  static Status DecodeBinary(const uint8_t* data, size_t len, GtidSet* out);
+  [[nodiscard]] static Status DecodeBinary(const uint8_t* data, size_t size, GtidSet* out);
 
   /**
    * @brief Encode for COM_BINLOG_DUMP_GTID: format 0 when no TSID has a tag,
    *   format 1 (one-byte varlen tag length per TSID) otherwise.
+   * @param[out] out Replaced with the encoding.
    */
   void EncodeBinary(std::vector<uint8_t>* out) const;
 
-  /** @brief Union @p other into this set; unchanged on failure (kLimitExceeded). */
-  Status Merge(const GtidSet& other);
+  /**
+   * @brief Union another set into this one.
+   * @param other Set to add.
+   * @return kOk, or kLimitExceeded, leaving this set unchanged.
+   */
+  [[nodiscard]] Status Merge(const GtidSet& other);
 
   /**
    * @brief Add one interval to a TSID.
+   * @param uuid Source UUID.
+   * @param tag Tag, normalized before use; empty for untagged. Only read during the call.
+   * @param interval GNO range [start, end).
    * @return kOk; kMalformedValue for an invalid tag or interval; kLimitExceeded.
    */
-  Status Add(const Uuid& uuid, std::string_view tag, Interval interval);
+  [[nodiscard]] Status Add(const Uuid& uuid, std::string_view tag, Interval interval);
 
-  /** @brief Whether every interval of this set lies in @p other under the same TSID. */
-  bool IsSubsetOf(const GtidSet& other) const;
+  /**
+   * @brief Whether every interval of this set lies in @p other under the same TSID.
+   * @param other Candidate superset.
+   */
+  [[nodiscard]] bool IsSubsetOf(const GtidSet& other) const;
 
-  /** @brief Whether the set holds no GTID. */
-  bool empty() const { return sets_.empty(); }
+  /** @return Whether the set holds no GTID. */
+  [[nodiscard]] bool empty() const { return sets_.empty(); }
 
   /** @brief Remove every GTID. */
   void Clear() { sets_.clear(); }
@@ -120,22 +149,24 @@ class GtidSet {
    * @brief Canonical text: one entry per TSID, ranges always as "a-b".
    *
    * A single GTID prints as "N-N" so the text never reads as a bare N.
+   *
+   * @return The set text; "" for the empty set.
    */
-  std::string ToString() const;
+  [[nodiscard]] std::string ToString() const;
 
  private:
   std::map<Tsid, std::vector<Interval>> sets_;
 };
 
-/** @brief GTID carried by a GTID_LOG_EVENT (33) or GTID_TAGGED_LOG_EVENT (42). */
-struct GtidEvent {
+/** @brief Parsed GTID_LOG_EVENT (33) or GTID_TAGGED_LOG_EVENT (42). */
+struct MYBINLOG_API GtidEvent {
   uint8_t flags = 0;  ///< gtid_flags (bit 0: may have been committed in parallel).
-  Uuid uuid{};
-  std::string tag;  ///< Lower-cased; empty when untagged.
-  uint64_t gno = 0;
+  Uuid uuid{};        ///< Source server UUID.
+  std::string tag;    ///< Lower-cased; empty when untagged.
+  uint64_t gno = 0;   ///< Transaction number, 1 <= gno < kGnoEnd.
 
-  /** @brief "uuid:gno" or "uuid:tag:gno". */
-  std::string ToString() const;
+  /** @return "uuid:gno" or "uuid:tag:gno". */
+  [[nodiscard]] std::string ToString() const;
 };
 
 /**
@@ -150,13 +181,32 @@ struct GtidEvent {
  *
  * @param header Header of the event; selects the layout.
  * @param body Bytes after the common header.
- * @param len Body length, trailer excluded.
- * @return kOk; kTruncated when the body ends early; kMalformedValue for a GNO
- *   outside [1, INT64_MAX), a bad tag, a missing UUID/GNO field or a size
- *   mismatch; kUnsupported for another event type, an unknown format version
- *   or an unknown non-ignorable field.
+ * @param size Body length, checksum trailer excluded.
+ * @param[out] out Filled on kOk; untouched otherwise.
+ * @return kOk; kTruncated when the body ends early (or @p body is null);
+ *   kMalformedValue for a GNO outside [1, INT64_MAX), a bad tag, a missing
+ *   UUID/GNO field or a size mismatch; kUnsupported for another event type,
+ *   an unknown format version or an unknown non-ignorable field. Reentrant.
  */
-Status ParseGtidEvent(const EventHeader& header, const uint8_t* body, size_t len, GtidEvent* out);
+[[nodiscard]] MYBINLOG_API Status ParseGtidEvent(const EventHeader& header, const uint8_t* body,
+                                                 size_t size, GtidEvent* out);
+
+/** @brief Parsed PREVIOUS_GTIDS_LOG_EVENT (35). */
+struct PreviousGtidsEvent {
+  GtidSet gtids;  ///< GTIDs written to the binlog before this file.
+};
+
+/**
+ * @brief Parse a PREVIOUS_GTIDS_LOG_EVENT body: a GtidSet in binary encoding.
+ * @param header Header of the event; not consulted by the current layout.
+ * @param body Bytes after the common header.
+ * @param size Body length, checksum trailer excluded.
+ * @param[out] out Filled on kOk; untouched otherwise.
+ * @return As GtidSet::DecodeBinary(). Reentrant.
+ */
+[[nodiscard]] MYBINLOG_API Status ParsePreviousGtidsEvent(const EventHeader& header,
+                                                          const uint8_t* body, size_t size,
+                                                          PreviousGtidsEvent* out);
 
 }  // namespace mybinlog
 

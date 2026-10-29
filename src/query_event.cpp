@@ -3,7 +3,7 @@
 #include <cstring>
 #include <utility>
 
-#include "mybinlog/bytes.h"
+#include "bytes_internal.h"
 
 namespace mybinlog {
 
@@ -153,8 +153,9 @@ Status ReadStatusVar(ByteReader* vars, QueryEvent* event, bool* stop) {
 
 }  // namespace
 
-Status ParseQueryEvent(const uint8_t* body, size_t len, QueryEvent* out) {
-  if (body == nullptr || len < kPostHeaderSize) return Status::kTruncated;
+Status ParseQueryEvent(const EventHeader& /*header*/, const uint8_t* body, size_t size,
+                       QueryEvent* out) {
+  if (body == nullptr || size < kPostHeaderSize) return Status::kTruncated;
   QueryEvent event;
   event.thread_id = ReadU32Le(body);
   event.exec_time = ReadU32Le(body + 4);
@@ -162,7 +163,7 @@ Status ParseQueryEvent(const uint8_t* body, size_t len, QueryEvent* out) {
   event.error_code = ReadU16Le(body + 9);
   const uint16_t status_vars_length = ReadU16Le(body + 11);
 
-  ByteReader reader(body + kPostHeaderSize, len - kPostHeaderSize);
+  ByteReader reader(body + kPostHeaderSize, size - kPostHeaderSize);
   const uint8_t* status_vars = nullptr;
   Status status = reader.ReadBytes(status_vars_length, &status_vars);
   if (status != Status::kOk) return status;

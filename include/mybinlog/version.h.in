@@ -1,0 +1,37 @@
+/**
+ * @file version.h
+ * @brief Version of libmybinlog, at build time and at run time.
+ *
+ * Generated from version.h.in by CMake; the numbers come from the project
+ * version. Before 1.0, a minor release may change the API.
+ */
+
+#ifndef MYBINLOG_VERSION_H_
+#define MYBINLOG_VERSION_H_
+
+#include "mybinlog/export.h"
+
+/** @brief Major version of the headers being compiled against. */
+#define MYBINLOG_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+/** @brief Minor version of the headers being compiled against. */
+#define MYBINLOG_VERSION_MINOR @PROJECT_VERSION_MINOR@
+/** @brief Patch version of the headers being compiled against. */
+#define MYBINLOG_VERSION_PATCH @PROJECT_VERSION_PATCH@
+/** @brief "MAJOR.MINOR.PATCH" of the headers being compiled against. */
+#define MYBINLOG_VERSION_STRING "@PROJECT_VERSION@"
+
+namespace mybinlog {
+
+/**
+ * @brief Version of the library actually linked, as "MAJOR.MINOR.PATCH".
+ *
+ * Differs from #MYBINLOG_VERSION_STRING only when a shared library of another
+ * version is loaded at run time.
+ *
+ * @return Static string, never null. Reentrant.
+ */
+[[nodiscard]] MYBINLOG_API const char* Version() noexcept;
+
+}  // namespace mybinlog
+
+#endif  // MYBINLOG_VERSION_H_

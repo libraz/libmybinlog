@@ -53,7 +53,7 @@ Status DecodeOne(const TableMapColumn& column, const Bytes& value, Value* out) {
   const Bytes body(w.bytes.begin(), w.bytes.end());
   EventHeader header;
   header.type_code = static_cast<uint8_t>(EventType::kWriteRowsEvent);
-  RowsEventData data;
+  RowsEvent data;
   const Status status =
       DecodeRowsEvent(header, body.data(), body.size(), table, DecodeOptions(), &data);
   if (status != Status::kOk) return status;
@@ -431,7 +431,7 @@ TEST(CodecRowsTemporal, Datetime2ZeroMonthDayConsumesTheFraction) {
   w.Le(1, 6).Le(0, 2).Le(2, 2).U8(2).U8(0x03).U8(0x00).Raw(EncodeDatetime2(f, 6)).Le(42, 4);
   EventHeader header;
   header.type_code = static_cast<uint8_t>(EventType::kWriteRowsEvent);
-  RowsEventData data;
+  RowsEvent data;
   ASSERT_EQ(DecodeRowsEvent(header, w.bytes.data(), w.bytes.size(), table, DecodeOptions(), &data),
             Status::kOk);
   ASSERT_EQ(data.rows.size(), 1u);

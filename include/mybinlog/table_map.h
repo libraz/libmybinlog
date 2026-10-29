@@ -21,7 +21,9 @@
 #include <string>
 #include <vector>
 
+#include "mybinlog/event_header.h"
 #include "mybinlog/event_types.h"
+#include "mybinlog/export.h"
 #include "mybinlog/server_flavor.h"
 #include "mybinlog/status.h"
 
@@ -44,6 +46,7 @@ struct TableMapColumn {
   uint32_t meta = 0;
   /** Element type when `type == kTypedArray`; unused otherwise. */
   ColumnType element_type = ColumnType::kLong;
+  /** Whether the column is nullable (the TABLE_MAP NULL bitmap). */
   bool nullable = false;
   /** From SIGNEDNESS; false when the field is absent (see TableMap::has_signedness). */
   bool is_unsigned = false;
@@ -59,14 +62,14 @@ struct TableMapColumn {
 
 /** @brief Parsed TABLE_MAP_EVENT. */
 struct TableMap {
-  uint64_t table_id = 0;  ///< 48-bit table id.
-  std::string schema;
-  std::string table;
-  std::vector<TableMapColumn> columns;
-  bool has_signedness = false;    ///< A SIGNEDNESS field was present.
-  bool has_column_names = false;  ///< A COLUMN_NAME field named every column.
-  bool has_enum_labels = false;   ///< An ENUM_STR_VALUE field labelled every ENUM column.
-  bool has_set_labels = false;    ///< A SET_STR_VALUE field labelled every SET column.
+  uint64_t table_id = 0;                ///< 48-bit table id the rows events refer to.
+  std::string schema;                   ///< Database name.
+  std::string table;                    ///< Table name.
+  std::vector<TableMapColumn> columns;  ///< One entry per column, in ordinal order.
+  bool has_signedness = false;          ///< A SIGNEDNESS field was present.
+  bool has_column_names = false;        ///< A COLUMN_NAME field named every column.
+  bool has_enum_labels = false;         ///< An ENUM_STR_VALUE field labelled every ENUM column.
+  bool has_set_labels = false;          ///< A SET_STR_VALUE field labelled every SET column.
 };
 
 /**
@@ -74,28 +77,37 @@ struct TableMap {
  *
  * Upstream `has_signedess_information_type`: the integer types, YEAR,
  * FLOAT/DOUBLE and both DECIMALs. TYPED_ARRAY takes none, whatever its element.
+ *
+ * @param type Wire column type.
+ * @return true for the types SIGNEDNESS indexes. Reentrant.
  */
-bool HasSignednessBit(ColumnType type) noexcept;
+[[nodiscard]] MYBINLOG_API bool HasSignednessBit(ColumnType type) noexcept;
 
 /**
- * @brief The column's declared type: kEnum or kSet for a kString column whose
- *   metadata byte 0 names one, the wire type otherwise.
+ * @brief The column's declared type.
+ * @param column A column of a parsed TableMap.
+ * @return kEnum or kSet for a kString column whose metadata byte 0 names one,
+ *   the wire type otherwise. Reentrant.
  */
-ColumnType RealType(const TableMapColumn& column) noexcept;
+[[nodiscard]] MYBINLOG_API ColumnType RealType(const TableMapColumn& column) noexcept;
 
 /**
  * @brief Parse a TABLE_MAP_EVENT body.
+ * @param header Header of the event; not consulted by the current layout.
  * @param body Bytes after the common header.
- * @param len Body length, checksum trailer excluded.
+ * @param size Body length, checksum trailer excluded.
  * @param flavor Server flavor; decides which columns the charset fields index.
- * @param[out] out Filled on success; untouched on failure.
+ * @param[out] out Filled on kOk; untouched otherwise.
  * @return kOk; kTruncated when the body ends early (or @p body is null);
  *   kInvalidMetadata for a column count of 0 or above kMaxTableColumns, a
  *   metadata block that does not match the column types, a length-prefix
  *   width outside 1..4, a packed int 0xFB/0xFF, or an optional-metadata field
  *   inconsistent with the columns; kUnsupported for an unknown column type.
+ *   Reentrant.
  */
-Status ParseTableMap(const uint8_t* body, size_t len, ServerFlavor flavor, TableMap* out);
+[[nodiscard]] MYBINLOG_API Status ParseTableMapEvent(const EventHeader& header, const uint8_t* body,
+                                                     size_t size, ServerFlavor flavor,
+                                                     TableMap* out);
 
 }  // namespace mybinlog
 

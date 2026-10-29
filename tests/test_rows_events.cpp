@@ -77,7 +77,7 @@ std::vector<size_t> All(size_t n) {
   return all;
 }
 
-Status Decode(EventType type, const Writer& w, const TableMap& table, RowsEventData* out,
+Status Decode(EventType type, const Writer& w, const TableMap& table, RowsEvent* out,
               const DecodeOptions& options = DecodeOptions()) {
   const Bytes body(w.bytes.begin(), w.bytes.end());
   return DecodeRowsEvent(Header(type), body.data(), body.size(), table, options, out);
@@ -91,7 +91,7 @@ TEST(CodecRowsEvent, WriteRowsIntAndVarchar) {
   table.columns[1].charset = 45;
   Writer w = PostHeader();
   w.U8(2).U8(0x03).U8(0x00).Le(42, 4).U8(5).Str("Alice");
-  RowsEventData data;
+  RowsEvent data;
   ASSERT_EQ(Decode(EventType::kWriteRowsEvent, w, table, &data), Status::kOk);
   ASSERT_EQ(data.rows.size(), 1u);
   EXPECT_TRUE(data.updates.empty());
@@ -105,7 +105,7 @@ TEST(CodecRowsEvent, WriteRowsIntAndVarchar) {
 TEST(CodecRowsEvent, SeveralRowsInOneEvent) {
   Writer w = PostHeader();
   w.U8(1).U8(0x01).U8(0x00).Le(100, 4).U8(0x00).Le(200, 4);
-  RowsEventData data;
+  RowsEvent data;
   ASSERT_EQ(Decode(EventType::kWriteRowsEvent, w, IntTable(1), &data), Status::kOk);
   ASSERT_EQ(data.rows.size(), 2u);
   EXPECT_EQ(data.rows[0][0].i, 100);
@@ -117,7 +117,7 @@ TEST(CodecRowsEvent, UpdateRowsArePairs) {
     SCOPED_TRACE(static_cast<int>(type));
     Writer w = PostHeader(type == EventType::kUpdateRowsEvent);
     w.U8(1).U8(0x01).U8(0x01).U8(0x00).Le(100, 4).U8(0x00).Le(200, 4);
-    RowsEventData data;
+    RowsEvent data;
     ASSERT_EQ(Decode(type, w, IntTable(1), &data), Status::kOk);
     EXPECT_TRUE(data.rows.empty());
     ASSERT_EQ(data.updates.size(), 1u);
@@ -134,7 +134,7 @@ TEST(CodecRowsEvent, DeleteAndV1Shapes) {
     const bool v2 = type == EventType::kDeleteRowsEvent;
     Writer w = PostHeader(v2);
     w.U8(1).U8(0x01).U8(0x00).Le(999, 4);
-    RowsEventData data;
+    RowsEvent data;
     ASSERT_EQ(Decode(type, w, IntTable(1), &data), Status::kOk);
     ASSERT_EQ(data.rows.size(), 1u);
     EXPECT_EQ(data.rows[0][0].i, 999);
@@ -145,7 +145,7 @@ TEST(CodecRowsEvent, V2ExtraDataIsSkipped) {
   Writer w;
   w.Le(10, 6).Le(0, 2).Le(6, 2).U8(0x00).U8(2).U8(0xAA).U8(0xBB);  // a 4-byte extra-info TLV
   w.U8(1).U8(0x01).U8(0x00).Le(7, 4);
-  RowsEventData data;
+  RowsEvent data;
   ASSERT_EQ(Decode(EventType::kWriteRowsEvent, w, IntTable(1), &data), Status::kOk);
   ASSERT_EQ(data.rows.size(), 1u);
   EXPECT_EQ(data.rows[0][0].i, 7);
@@ -159,7 +159,7 @@ TEST(CodecRowsEvent, V2ExtraDataIsSkipped) {
 TEST(CodecRowsEvent, NonRowsEventTypesAreUnsupported) {
   Writer w = PostHeader();
   w.U8(1).U8(0x01).U8(0x00).Le(7, 4);
-  RowsEventData data;
+  RowsEvent data;
   const EventType types[] = {EventType::kPartialUpdateRowsEvent,
                              EventType::kMariaDBWriteRowsCompressedEvent,
                              EventType::kMariaDBUpdateRowsCompressedEventV1,
@@ -216,7 +216,7 @@ TEST(CodecRowsEvent, NullBitmapsAcrossByteBoundariesAndRows) {
     for (size_t image = 0; image < c.rows.size(); ++image) {
       WriteImage(&w, c.columns, image, c.rows[image]);
     }
-    RowsEventData data;
+    RowsEvent data;
     ASSERT_EQ(Decode(EventType::kWriteRowsEvent, w, IntTable(c.columns), &data), Status::kOk);
     ASSERT_EQ(data.rows.size(), c.rows.size());
     for (size_t image = 0; image < c.rows.size(); ++image) {
@@ -234,7 +234,7 @@ TEST(CodecRowsEvent, BeforeAndAfterImagesKeepTheirOwnNullBitmaps) {
   WriteBitmap(&w, kColumns, All(kColumns));
   WriteImage(&w, kColumns, 0, {1});
   WriteImage(&w, kColumns, 1, {8});
-  RowsEventData data;
+  RowsEvent data;
   ASSERT_EQ(Decode(EventType::kUpdateRowsEvent, w, IntTable(kColumns), &data), Status::kOk);
   ASSERT_EQ(data.updates.size(), 1u);
   ExpectImage(data.updates[0].first, kColumns, 0, {1});
@@ -244,7 +244,7 @@ TEST(CodecRowsEvent, BeforeAndAfterImagesKeepTheirOwnNullBitmaps) {
 // --- FULL row image only ---
 
 TEST(CodecRowsEvent, PartialRowImagesAreUnsupported) {
-  RowsEventData data;
+  RowsEvent data;
   {
     SCOPED_TRACE("write image missing column 2");
     Writer w = PostHeader();
@@ -274,7 +274,7 @@ TEST(CodecRowsEvent, PartialRowImagesAreUnsupported) {
 // --- Column count ---
 
 TEST(CodecRowsEvent, ColumnCountMustMatchTheTableAndTheServerLimit) {
-  RowsEventData data;
+  RowsEvent data;
   {
     SCOPED_TRACE("more columns than the TABLE_MAP");
     Writer w = PostHeader();
@@ -320,7 +320,7 @@ TEST(CodecRowsEvent, ColumnCountMustMatchTheTableAndTheServerLimit) {
 // --- Truncation ---
 
 TEST(CodecRowsEvent, TruncatedBodies) {
-  RowsEventData data;
+  RowsEvent data;
   Writer tiny;
   tiny.Le(0, 4);
   EXPECT_EQ(Decode(EventType::kWriteRowsEvent, tiny, IntTable(1), &data), Status::kTruncated);
@@ -343,7 +343,7 @@ TEST(CodecRowsEvent, TruncatedBodies) {
 }
 
 TEST(CodecRowsEvent, FailureLeavesTheOutputUntouched) {
-  RowsEventData data;
+  RowsEvent data;
   data.rows.resize(3);
   Writer w = PostHeader();
   w.U8(1).U8(0x01).U8(0x00).Le(1, 4).U8(0x00).Le(2, 2);
@@ -357,7 +357,7 @@ TEST(CodecRowsEvent, AFailingColumnFailsTheEvent) {
                           Column(ColumnType::kLong)});
   Writer w = PostHeader();
   w.U8(3).U8(0x07).U8(0x00).Le(42, 4).Le(0x0A0B0C0D, 4).Le(99, 4);
-  RowsEventData data;
+  RowsEvent data;
   EXPECT_EQ(Decode(EventType::kWriteRowsEvent, w, table, &data), Status::kUnsupported);
 
   // A NULL in an undecodable column has no bytes to measure and decodes.
@@ -380,7 +380,7 @@ TEST(CodecRowsEvent, UnselectedColumnsAreMeasuredNotDecoded) {
 
   DecodeOptions options;
   options.columns = {true, false, false, true};
-  RowsEventData data;
+  RowsEvent data;
   ASSERT_EQ(Decode(EventType::kWriteRowsEvent, w, table, &data, options), Status::kOk);
   ASSERT_EQ(data.rows.size(), 1u);
   const Row& row = data.rows[0];
@@ -409,7 +409,7 @@ TEST(CodecRowsEvent, UnselectedColumnsStillValidateTheirMetadata) {
   w.U8(2).U8(0x03).U8(0x00).Le(0, 8);
   DecodeOptions options;
   options.columns = {false, true};
-  RowsEventData data;
+  RowsEvent data;
   EXPECT_EQ(Decode(EventType::kWriteRowsEvent, w, table, &data, options), Status::kInvalidMetadata);
 
   // A MariaDB DECIMAL(40,31) keeps the row aligned when skipped.
@@ -461,7 +461,7 @@ TEST(CodecRowsEvent, BudgetChargesEveryRowAndColumn) {
   options.budget = &budget;
   options.per_value_overhead = kValueOverhead;
   options.per_row_overhead = kRowOverhead;
-  RowsEventData data;
+  RowsEvent data;
   ASSERT_EQ(Decode(EventType::kWriteRowsEvent, w, table, &data, options), Status::kOk);
   ASSERT_EQ(data.rows.size(), 2u);
   EXPECT_EQ(budget.used, 5u + 3u + 2u * 2u * kValueOverhead + 2u * kRowOverhead);
@@ -476,7 +476,7 @@ TEST(CodecRowsEvent, BudgetChargesBothImagesOfAnUpdate) {
   options.budget = &budget;
   options.per_value_overhead = kValueOverhead;
   options.per_row_overhead = kRowOverhead;
-  RowsEventData data;
+  RowsEvent data;
   ASSERT_EQ(Decode(EventType::kUpdateRowsEvent, w, table, &data, options), Status::kOk);
   EXPECT_EQ(budget.used, 4u + 2u + 2u * kValueOverhead + kRowOverhead);
 }
@@ -493,7 +493,7 @@ TEST(CodecRowsEvent, ExhaustedBudgetFailsTheEvent) {
   DecodeOptions options;
   options.budget = &budget;
   options.per_value_overhead = kValueOverhead;
-  RowsEventData data;
+  RowsEvent data;
   EXPECT_EQ(Decode(EventType::kWriteRowsEvent, w, IntTable(kColumns), &data, options),
             Status::kLimitExceeded);
   EXPECT_LE(budget.used, budget.limit);

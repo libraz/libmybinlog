@@ -71,7 +71,7 @@ Status DecodeOne(const TableMapColumn& column, const Bytes& value, Value* out,
   const Bytes body(w.bytes.begin(), w.bytes.end());  // snug, so an overread hits the redzone
   EventHeader header;
   header.type_code = static_cast<uint8_t>(EventType::kWriteRowsEvent);
-  RowsEventData data;
+  RowsEvent data;
   const Status status = DecodeRowsEvent(header, body.data(), body.size(), table, options, &data);
   if (status != Status::kOk) return status;
   if (data.rows.size() != 1 || data.rows[0].size() != 1) {

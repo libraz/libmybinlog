@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <charconv>
 
-#include "mybinlog/bytes.h"
+#include "bytes_internal.h"
 #include "mybinlog/event_types.h"
 
 namespace mybinlog {
@@ -226,8 +226,8 @@ Status GtidSet::Parse(std::string_view text, GtidSet* out) {
   return Status::kOk;
 }
 
-Status GtidSet::DecodeBinary(const uint8_t* data, size_t len, GtidSet* out) {
-  if (len < 8) return Status::kTruncated;
+Status GtidSet::DecodeBinary(const uint8_t* data, size_t size, GtidSet* out) {
+  if (data == nullptr || size < 8) return Status::kTruncated;
   const uint64_t count_and_format = ReadU64Le(data);
   const uint8_t format = static_cast<uint8_t>(count_and_format >> 56);
   if (format > 1) return Status::kUnsupported;
@@ -238,21 +238,21 @@ Status GtidSet::DecodeBinary(const uint8_t* data, size_t len, GtidSet* out) {
   size_t pos = 8;
   // Smallest TSID: uuid, interval count, one interval.
   constexpr size_t kMinTsidSize = 16 + 8 + 16;
-  if (tsid_count > (len - pos) / kMinTsidSize) return Status::kTruncated;
+  if (tsid_count > (size - pos) / kMinTsidSize) return Status::kTruncated;
 
   GtidSet decoded;
   for (uint64_t i = 0; i < tsid_count; ++i) {
-    if (len - pos < 16) return Status::kTruncated;
+    if (size - pos < 16) return Status::kTruncated;
     Uuid uuid{};
     std::copy_n(data + pos, uuid.size(), uuid.begin());
     pos += uuid.size();
     std::string tag;
     if (tagged) {
       uint64_t tag_length = 0;
-      const Status status = ReadVarlen(data, len, &pos, &tag_length);
+      const Status status = ReadVarlen(data, size, &pos, &tag_length);
       if (status != Status::kOk) return status;
       if (tag_length > kGtidTagMaxLength) return Status::kMalformedValue;
-      if (tag_length > len - pos) return Status::kTruncated;
+      if (tag_length > size - pos) return Status::kTruncated;
       const std::string_view raw(reinterpret_cast<const char*>(data + pos),
                                  static_cast<size_t>(tag_length));
       pos += static_cast<size_t>(tag_length);
@@ -260,12 +260,12 @@ Status GtidSet::DecodeBinary(const uint8_t* data, size_t len, GtidSet* out) {
         return Status::kMalformedValue;
       }
     }
-    if (len - pos < 8) return Status::kTruncated;
+    if (size - pos < 8) return Status::kTruncated;
     const uint64_t count = ReadU64Le(data + pos);
     pos += 8;
     if (count == 0) return Status::kMalformedValue;
     if (count > kMaxIntervalsPerTsid) return Status::kLimitExceeded;
-    if (count > (len - pos) / 16) return Status::kTruncated;
+    if (count > (size - pos) / 16) return Status::kTruncated;
     auto& intervals = decoded.sets_[{uuid, tag}];
     if (intervals.size() > kMaxIntervalsPerTsid - static_cast<size_t>(count)) {
       return Status::kLimitExceeded;
@@ -279,7 +279,7 @@ Status GtidSet::DecodeBinary(const uint8_t* data, size_t len, GtidSet* out) {
       intervals.push_back({start, end});
     }
   }
-  if (pos != len) return Status::kMalformedValue;
+  if (pos != size) return Status::kMalformedValue;
   for (auto& entry : decoded.sets_) NormalizeIntervals(&entry.second);
   *out = std::move(decoded);
   return Status::kOk;
@@ -389,10 +389,10 @@ std::string GtidEvent::ToString() const {
   return text;
 }
 
-Status ParseGtidEvent(const EventHeader& header, const uint8_t* body, size_t len, GtidEvent* out) {
+Status ParseGtidEvent(const EventHeader& header, const uint8_t* body, size_t size, GtidEvent* out) {
   GtidEvent event;
   if (header.type_code == static_cast<uint8_t>(EventType::kGtidLogEvent)) {
-    if (len < kGtidEventFixedSize) return Status::kTruncated;
+    if (body == nullptr || size < kGtidEventFixedSize) return Status::kTruncated;
     event.flags = body[0];
     std::copy_n(body + 1, event.uuid.size(), event.uuid.begin());
     event.gno = ReadU64Le(body + 17);
@@ -403,62 +403,63 @@ Status ParseGtidEvent(const EventHeader& header, const uint8_t* body, size_t len
   if (header.type_code != static_cast<uint8_t>(EventType::kGtidTaggedLogEvent)) {
     return Status::kUnsupported;
   }
+  if (body == nullptr) return Status::kTruncated;
 
   size_t pos = 0;
   uint64_t value = 0;
-  Status status = ReadVarlen(body, len, &pos, &value);
+  Status status = ReadVarlen(body, size, &pos, &value);
   if (status != Status::kOk) return status;
   if (value != kTaggedGtidFormatVersion) return Status::kUnsupported;
   uint64_t message_size = 0;
-  status = ReadVarlen(body, len, &pos, &message_size);
+  status = ReadVarlen(body, size, &pos, &message_size);
   if (status != Status::kOk) return status;
-  if (message_size > len) return Status::kTruncated;
-  if (message_size < len) return Status::kMalformedValue;
+  if (message_size > size) return Status::kTruncated;
+  if (message_size < size) return Status::kMalformedValue;
   uint64_t last_non_ignorable = 0;
-  status = ReadVarlen(body, len, &pos, &last_non_ignorable);
+  status = ReadVarlen(body, size, &pos, &last_non_ignorable);
   if (status != Status::kOk) return status;
   // The id names one past the last field a decoder may not skip.
   if (last_non_ignorable > kTaggedGtidLastKnownFieldId + 1) return Status::kUnsupported;
 
   // A field absent from the message keeps its default, as upstream decodes.
   bool present = false;
-  status = TakeFieldId(body, len, &pos, kFieldFlags, &present);
+  status = TakeFieldId(body, size, &pos, kFieldFlags, &present);
   if (status != Status::kOk) return status;
   if (present) {
-    status = ReadVarlen(body, len, &pos, &value);
+    status = ReadVarlen(body, size, &pos, &value);
     if (status != Status::kOk) return status;
     if (value > UINT8_MAX) return Status::kMalformedValue;
     event.flags = static_cast<uint8_t>(value);
   }
 
-  status = TakeFieldId(body, len, &pos, kFieldUuid, &present);
+  status = TakeFieldId(body, size, &pos, kFieldUuid, &present);
   if (status != Status::kOk) return status;
   if (!present) return Status::kMalformedValue;
   for (uint8_t& byte : event.uuid) {
-    status = ReadVarlen(body, len, &pos, &value);
+    status = ReadVarlen(body, size, &pos, &value);
     if (status != Status::kOk) return status;
     if (value > UINT8_MAX) return Status::kMalformedValue;
     byte = static_cast<uint8_t>(value);
   }
 
-  status = TakeFieldId(body, len, &pos, kFieldGno, &present);
+  status = TakeFieldId(body, size, &pos, kFieldGno, &present);
   if (status != Status::kOk) return status;
   if (!present) return Status::kMalformedValue;
-  status = ReadVarlen(body, len, &pos, &value);
+  status = ReadVarlen(body, size, &pos, &value);
   if (status != Status::kOk) return status;
   // Signed varlen: low bit is the sign, the rest the (complemented) magnitude.
   const auto gno = static_cast<int64_t>((value >> 1) ^ (0 - (value & 1)));
   if (gno <= 0 || static_cast<uint64_t>(gno) >= kGnoEnd) return Status::kMalformedValue;
   event.gno = static_cast<uint64_t>(gno);
 
-  status = TakeFieldId(body, len, &pos, kFieldTag, &present);
+  status = TakeFieldId(body, size, &pos, kFieldTag, &present);
   if (status != Status::kOk) return status;
   if (present) {
     uint64_t tag_length = 0;
-    status = ReadVarlen(body, len, &pos, &tag_length);
+    status = ReadVarlen(body, size, &pos, &tag_length);
     if (status != Status::kOk) return status;
     if (tag_length > kGtidTagMaxLength) return Status::kMalformedValue;
-    if (tag_length > len - pos) return Status::kTruncated;
+    if (tag_length > size - pos) return Status::kTruncated;
     const std::string_view raw(reinterpret_cast<const char*>(body + pos),
                                static_cast<size_t>(tag_length));
     if (!raw.empty() && NormalizeGtidTag(raw, &event.tag) != Status::kOk) {
@@ -469,6 +470,11 @@ Status ParseGtidEvent(const EventHeader& header, const uint8_t* body, size_t len
   // message size checked above; nothing past the tag is needed here.
   *out = std::move(event);
   return Status::kOk;
+}
+
+Status ParsePreviousGtidsEvent(const EventHeader& /*header*/, const uint8_t* body, size_t size,
+                               PreviousGtidsEvent* out) {
+  return GtidSet::DecodeBinary(body, size, &out->gtids);
 }
 
 }  // namespace mybinlog

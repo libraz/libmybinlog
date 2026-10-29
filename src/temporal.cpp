@@ -1,4 +1,4 @@
-#include "mybinlog/bytes.h"
+#include "bytes_internal.h"
 #include "temporal_internal.h"
 
 namespace mybinlog {

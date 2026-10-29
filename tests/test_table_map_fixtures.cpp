@@ -174,7 +174,8 @@ TEST(CodecTableMapFixtures, ParsesEveryTableMapAndQueryEvent) {
 
       if (header.type_code == static_cast<uint8_t>(EventType::kTableMapEvent)) {
         TableMap map;
-        ASSERT_EQ(ParseTableMap(body, layout.body_length(), fixture.flavor, &map), Status::kOk);
+        ASSERT_EQ(ParseTableMapEvent(header, body, layout.body_length(), fixture.flavor, &map),
+                  Status::kOk);
         EXPECT_EQ(map.schema, "fx");
         EXPECT_EQ(map.table, "t");
         EXPECT_GT(map.table_id, 0u);
@@ -182,7 +183,7 @@ TEST(CodecTableMapFixtures, ParsesEveryTableMapAndQueryEvent) {
         ++table_maps;
       } else if (header.type_code == static_cast<uint8_t>(EventType::kQueryEvent)) {
         QueryEvent query;
-        ASSERT_EQ(ParseQueryEvent(body, layout.body_length(), &query), Status::kOk);
+        ASSERT_EQ(ParseQueryEvent(header, body, layout.body_length(), &query), Status::kOk);
         EXPECT_TRUE(query.status_vars_complete) << query.query;
         EXPECT_TRUE(query.has_sql_mode) << query.query;
         EXPECT_TRUE(query.has_charset) << query.query;

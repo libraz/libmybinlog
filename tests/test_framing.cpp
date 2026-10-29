@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "mybinlog/bytes.h"
+#include "bytes_internal.h"
 #include "mybinlog/crc32.h"
 #include "mybinlog/event_header.h"
 #include "mybinlog/event_types.h"
@@ -332,6 +332,12 @@ TEST(CodecFraming, ColumnTypeValuesMatchWire) {
 
 // --- ROTATE body ---
 
+EventHeader RotateHeader() {
+  EventHeader header;
+  header.type_code = static_cast<uint8_t>(EventType::kRotateEvent);
+  return header;
+}
+
 std::vector<uint8_t> RotateBody(uint64_t position, const std::string& name) {
   std::vector<uint8_t> body(8);
   std::memcpy(body.data(), &position, 8);
@@ -342,7 +348,7 @@ std::vector<uint8_t> RotateBody(uint64_t position, const std::string& name) {
 TEST(CodecFraming, RotateValid) {
   auto body = RotateBody(4, "mysql-bin.000002");
   RotateEvent result;
-  ASSERT_EQ(ParseRotateEvent(body.data(), body.size(), &result), Status::kOk);
+  ASSERT_EQ(ParseRotateEvent(RotateHeader(), body.data(), body.size(), &result), Status::kOk);
   EXPECT_EQ(result.position, 4u);
   EXPECT_EQ(result.next_file, "mysql-bin.000002");
 }
@@ -350,7 +356,7 @@ TEST(CodecFraming, RotateValid) {
 TEST(CodecFraming, RotateLargePosition) {
   auto body = RotateBody(123456789012345ULL, "binlog.000100");
   RotateEvent result;
-  ASSERT_EQ(ParseRotateEvent(body.data(), body.size(), &result), Status::kOk);
+  ASSERT_EQ(ParseRotateEvent(RotateHeader(), body.data(), body.size(), &result), Status::kOk);
   EXPECT_EQ(result.position, 123456789012345ULL);
   EXPECT_EQ(result.next_file, "binlog.000100");
 }
@@ -359,7 +365,7 @@ TEST(CodecFraming, RotatePositionOnly) {
   auto body = RotateBody(4, "");
   RotateEvent result;
   result.next_file = "stale";
-  ASSERT_EQ(ParseRotateEvent(body.data(), body.size(), &result), Status::kOk);
+  ASSERT_EQ(ParseRotateEvent(RotateHeader(), body.data(), body.size(), &result), Status::kOk);
   EXPECT_EQ(result.position, 4u);
   EXPECT_TRUE(result.next_file.empty());
 }
@@ -367,15 +373,15 @@ TEST(CodecFraming, RotatePositionOnly) {
 TEST(CodecFraming, RotateTrailingNulIsDropped) {
   auto body = RotateBody(4, std::string("binlog.000003\0", 14));
   RotateEvent result;
-  ASSERT_EQ(ParseRotateEvent(body.data(), body.size(), &result), Status::kOk);
+  ASSERT_EQ(ParseRotateEvent(RotateHeader(), body.data(), body.size(), &result), Status::kOk);
   EXPECT_EQ(result.next_file, "binlog.000003");
 }
 
 TEST(CodecFraming, RotateTooShort) {
   uint8_t buf[7] = {0};
   RotateEvent result;
-  EXPECT_EQ(ParseRotateEvent(buf, sizeof(buf), &result), Status::kTruncated);
-  EXPECT_EQ(ParseRotateEvent(nullptr, 100, &result), Status::kTruncated);
+  EXPECT_EQ(ParseRotateEvent(RotateHeader(), buf, sizeof(buf), &result), Status::kTruncated);
+  EXPECT_EQ(ParseRotateEvent(RotateHeader(), nullptr, 100, &result), Status::kTruncated);
 }
 
 }  // namespace

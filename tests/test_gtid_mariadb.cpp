@@ -229,6 +229,17 @@ TEST(CodecGtidMariaDb, GtidEventLength) {
 
 // --- MARIADB_GTID_LIST_EVENT ---
 
+EventHeader HeaderOf(EventType type) {
+  EventHeader header;
+  header.type_code = static_cast<uint8_t>(type);
+  return header;
+}
+
+Status ParseList(const Bytes& body, MariaDbGtidListEvent* out) {
+  return ParseMariaDbGtidListEvent(HeaderOf(EventType::kMariaDBGtidListEvent), body.data(),
+                                   body.size(), out);
+}
+
 Bytes GtidListBody(const std::vector<MariaDbGtid>& gtids, uint32_t flags = 0) {
   Bytes body;
   PutU32Le(&body, (flags << 28) | (static_cast<uint32_t>(gtids.size()) & 0x0FFFFFFFu));
@@ -246,41 +257,45 @@ TEST(CodecGtidMariaDb, GtidList) {
         std::vector<MariaDbGtid>{Gtid(0, 1, 42), Gtid(1, 2, 100), Gtid(3, 5, 999)},
         std::vector<MariaDbGtid>{Gtid(UINT32_MAX, UINT32_MAX, UINT64_MAX)}}) {
     const Bytes body = GtidListBody(gtids);
-    MariaDbGtidPosition position;
-    ASSERT_EQ(ParseGtidListEvent(body.data(), body.size(), &position), Status::kOk);
-    EXPECT_EQ(position.gtids, gtids);
+    MariaDbGtidListEvent list;
+    ASSERT_EQ(ParseList(body, &list), Status::kOk);
+    EXPECT_EQ(list.gtids.gtids, gtids);
+    EXPECT_EQ(list.flags, 0);
   }
 }
 
 TEST(CodecGtidMariaDb, GtidListFlagsDoNotAffectTheCount) {
   const Bytes body = GtidListBody({Gtid(0, 1, 42)}, 0x5);
-  MariaDbGtidPosition position;
-  ASSERT_EQ(ParseGtidListEvent(body.data(), body.size(), &position), Status::kOk);
-  EXPECT_EQ(position.gtids, (std::vector<MariaDbGtid>{Gtid(0, 1, 42)}));
+  MariaDbGtidListEvent list;
+  ASSERT_EQ(ParseList(body, &list), Status::kOk);
+  EXPECT_EQ(list.gtids.gtids, (std::vector<MariaDbGtid>{Gtid(0, 1, 42)}));
+  EXPECT_EQ(list.flags, 0x5);
 }
 
 TEST(CodecGtidMariaDb, GtidListToText) {
   const Bytes body = GtidListBody({Gtid(0, 1, 42), Gtid(1, 2, 100)});
-  MariaDbGtidPosition position;
-  ASSERT_EQ(ParseGtidListEvent(body.data(), body.size(), &position), Status::kOk);
-  EXPECT_EQ(position.ToString(), "0-1-42,1-2-100");
+  MariaDbGtidListEvent list;
+  ASSERT_EQ(ParseList(body, &list), Status::kOk);
+  EXPECT_EQ(list.gtids.ToString(), "0-1-42,1-2-100");
 }
 
 TEST(CodecGtidMariaDb, GtidListTruncated) {
-  MariaDbGtidPosition position;
+  MariaDbGtidListEvent list;
   const Bytes short_body = {0, 0, 0};
-  EXPECT_EQ(ParseGtidListEvent(short_body.data(), short_body.size(), &position),
-            Status::kTruncated);
+  EXPECT_EQ(ParseList(short_body, &list), Status::kTruncated);
 
   Bytes body = GtidListBody({Gtid(0, 1, 42)});
   body[0] = 2;  // Claims two entries, holds one.
-  EXPECT_EQ(ParseGtidListEvent(body.data(), body.size(), &position), Status::kTruncated);
+  EXPECT_EQ(ParseList(body, &list), Status::kTruncated);
 
   // The largest count cannot overflow the bound check.
   Bytes huge = GtidListBody({});
   huge[0] = huge[1] = huge[2] = 0xFF;
   huge[3] = 0x0F;
-  EXPECT_EQ(ParseGtidListEvent(huge.data(), huge.size(), &position), Status::kTruncated);
+  EXPECT_EQ(ParseList(huge, &list), Status::kTruncated);
+  EXPECT_EQ(
+      ParseMariaDbGtidListEvent(HeaderOf(EventType::kMariaDBGtidListEvent), nullptr, 4, &list),
+      Status::kTruncated);
 }
 
 // --- MARIADB_ANNOTATE_ROWS_EVENT ---
@@ -291,18 +306,23 @@ TEST(CodecGtidMariaDb, AnnotateRows) {
         std::string("UPDATE articles SET content = 'new text', updated_at = NOW() WHERE id = 42"),
         std::string("INSERT INTO t1 VALUES (1, '\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e')"),
         std::string("DELETE FROM t1 WHERE id = 99")}) {
-    std::string out;
-    ASSERT_EQ(ExtractAnnotateRows(reinterpret_cast<const uint8_t*>(sql.data()), sql.size(), &out),
+    MariaDbAnnotateRowsEvent out;
+    ASSERT_EQ(ParseMariaDbAnnotateRowsEvent(HeaderOf(EventType::kMariaDBAnnotateRowsEvent),
+                                            reinterpret_cast<const uint8_t*>(sql.data()),
+                                            sql.size(), &out),
               Status::kOk);
-    EXPECT_EQ(out, sql);
+    EXPECT_EQ(out.query, sql);
   }
 }
 
 TEST(CodecGtidMariaDb, AnnotateRowsRejectsAnEmptyBody) {
   const uint8_t body[] = {'x'};
-  std::string out = "unchanged";
-  EXPECT_EQ(ExtractAnnotateRows(body, 0, &out), Status::kTruncated);
-  EXPECT_EQ(out, "unchanged");
+  MariaDbAnnotateRowsEvent out;
+  out.query = "unchanged";
+  EXPECT_EQ(
+      ParseMariaDbAnnotateRowsEvent(HeaderOf(EventType::kMariaDBAnnotateRowsEvent), body, 0, &out),
+      Status::kTruncated);
+  EXPECT_EQ(out.query, "unchanged");
 }
 
 }  // namespace

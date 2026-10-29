@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "mybinlog/event_header.h"
+#include "mybinlog/export.h"
 #include "mybinlog/status.h"
 #include "mybinlog/table_map.h"
 #include "mybinlog/value.h"
@@ -37,6 +38,9 @@ inline constexpr size_t kMaxDecompressedColumnBytes = 64U * 1024U * 1024U;
  * every value its payload bytes before they are copied (a compressed value is
  * clamped to what remains before inflating), and every row or UPDATE pair
  * `per_row_overhead` once decoded. `used` reads back what an event bought.
+ *
+ * Thread safety: a budget is mutated by the decode it is passed to, so it must
+ * not be shared between concurrent calls.
  */
 struct DecodeBudget {
   size_t limit = kMaxDecompressedColumnBytes;  ///< Total bytes the event may charge.
@@ -47,18 +51,26 @@ struct DecodeBudget {
    *
    * At least @p expansion_ceiling, so a large compressed value still decodes;
    * above that it follows the body size, which bounds every uncompressed value.
+   *
+   * @param body_bytes Size of the rows event body.
+   * @param expansion_ceiling Floor of the limit.
+   * @return A budget with nothing charged.
    */
-  static DecodeBudget ForEventBody(size_t body_bytes,
-                                   size_t expansion_ceiling = kMaxDecompressedColumnBytes) {
+  [[nodiscard]] static DecodeBudget ForEventBody(
+      size_t body_bytes, size_t expansion_ceiling = kMaxDecompressedColumnBytes) {
     DecodeBudget budget;
     budget.limit = body_bytes > expansion_ceiling ? body_bytes : expansion_ceiling;
     return budget;
   }
 
-  /** @brief Bytes still available. */
-  size_t Remaining() const { return limit - used; }
+  /** @return Bytes still available. */
+  [[nodiscard]] size_t Remaining() const { return limit - used; }
 
-  /** @brief Charge @p bytes; false (charging nothing) when they do not fit. */
+  /**
+   * @brief Charge bytes against the budget.
+   * @param bytes Bytes to charge.
+   * @return true when charged; false, charging nothing, when they do not fit.
+   */
   bool Charge(size_t bytes) {
     if (bytes > Remaining()) return false;
     used += bytes;
@@ -91,10 +103,10 @@ struct DecodeOptions {
 /** @brief One row image, a Value per TABLE_MAP column in ordinal order. */
 using Row = std::vector<Value>;
 
-/** @brief Decoded rows event: #rows for WRITE and DELETE, #updates (before, after) for UPDATE. */
-struct RowsEventData {
-  std::vector<Row> rows;
-  std::vector<std::pair<Row, Row>> updates;
+/** @brief Decoded WRITE/UPDATE/DELETE_ROWS event. */
+struct RowsEvent {
+  std::vector<Row> rows;                     ///< WRITE and DELETE: one image per row.
+  std::vector<std::pair<Row, Row>> updates;  ///< UPDATE: (before, after) per row.
 };
 
 /**
@@ -106,9 +118,10 @@ struct RowsEventData {
  *
  * @param header Header of the event; its type code selects v1/v2 and the shape.
  * @param body Bytes after the common header.
- * @param len Body length, checksum trailer excluded.
- * @param table The TABLE_MAP the event's table id refers to.
- * @param options Column selection and limits.
+ * @param size Body length, checksum trailer excluded.
+ * @param table The TABLE_MAP the event's table id refers to; only read during the call.
+ * @param options Column selection and limits; `options.budget`, when set, is
+ *   charged even when the call fails.
  * @param[out] out Filled on success; untouched on failure.
  * @return kOk; kTruncated when the body or a value ends early (or @p body is
  *   null); kInvalidMetadata for a column count of 0, above kMaxTableColumns or
@@ -126,10 +139,11 @@ struct RowsEventData {
  *   row image, a column type the codec does not decode, or an unknown
  *   compression method; kLimitExceeded when a value exceeds
  *   DecodeOptions::max_value_bytes or max_decompressed_bytes or the budget
- *   runs out.
+ *   runs out. Reentrant; concurrent calls must not share a DecodeBudget.
  */
-Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t len,
-                       const TableMap& table, const DecodeOptions& options, RowsEventData* out);
+[[nodiscard]] MYBINLOG_API Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body,
+                                                  size_t size, const TableMap& table,
+                                                  const DecodeOptions& options, RowsEvent* out);
 
 }  // namespace mybinlog
 

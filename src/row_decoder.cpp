@@ -7,8 +7,8 @@
 #include <limits>
 #include <utility>
 
+#include "bytes_internal.h"
 #include "decimal_internal.h"
-#include "mybinlog/bytes.h"
 #include "temporal_internal.h"
 
 namespace mybinlog {
@@ -379,8 +379,8 @@ Status ChargeRow(const DecodeOptions& options) {
 
 }  // namespace
 
-Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t len,
-                       const TableMap& table, const DecodeOptions& options, RowsEventData* out) {
+Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t size,
+                       const TableMap& table, const DecodeOptions& options, RowsEvent* out) {
   bool v2 = false;
   bool update = false;
   switch (static_cast<EventType>(header.type_code)) {
@@ -402,7 +402,7 @@ Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t le
   }
   if (body == nullptr) return Status::kTruncated;
 
-  ByteReader reader(body, len);
+  ByteReader reader(body, size);
   Status status = reader.Skip(8);  // table_id (6), flags (2)
   if (status != Status::kOk) return status;
   if (v2) {
@@ -430,7 +430,7 @@ Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t le
     if (!AllSet(present, columns)) return Status::kUnsupported;
   }
 
-  RowsEventData data;
+  RowsEvent data;
   while (reader.remaining() > 0) {
     if (update) {
       std::pair<Row, Row> pair;

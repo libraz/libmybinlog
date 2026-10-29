@@ -1,6 +1,8 @@
 /**
- * @file bytes.h
+ * @file bytes_internal.h
  * @brief Little-/big-endian readers, packed integers and bitmaps for binlog bytes.
+ *
+ * Internal: not installed and not part of the public API.
  *
  * The unchecked `ReadU*` loaders assume the caller has already proven the
  * bytes are present. `ByteReader` is the checked cursor: every bound is tested
@@ -10,8 +12,8 @@
  * is narrowed.
  */
 
-#ifndef MYBINLOG_BYTES_H_
-#define MYBINLOG_BYTES_H_
+#ifndef MYBINLOG_BYTES_INTERNAL_H_
+#define MYBINLOG_BYTES_INTERNAL_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -81,12 +83,50 @@ inline uint32_t ReadU32Be(const uint8_t* data) {
  * or as the 8-byte form.
  *
  * @param data Bytes to decode.
- * @param len Bytes readable at @p data.
+ * @param size Bytes readable at @p data.
  * @param[out] value Decoded integer; untouched on failure.
  * @param[out] consumed Bytes consumed (1, 3, 4 or 9); untouched on failure.
- * @return kOk; kTruncated when @p len is short; kInvalidMetadata for 0xFB / 0xFF.
+ * @return kOk; kTruncated when @p size is short; kInvalidMetadata for 0xFB / 0xFF.
  */
-Status ReadPackedInt(const uint8_t* data, size_t len, uint64_t* value, size_t* consumed);
+[[nodiscard]] inline Status ReadPackedInt(const uint8_t* data, size_t size, uint64_t* value,
+                                          size_t* consumed) {
+  if (size < 1) return Status::kTruncated;
+  const uint8_t first = data[0];
+  if (first < 0xFB) {
+    *value = first;
+    *consumed = 1;
+    return Status::kOk;
+  }
+  size_t width = 0;
+  switch (first) {
+    case 0xFC:
+      width = 2;
+      break;
+    case 0xFD:
+      width = 3;
+      break;
+    case 0xFE:
+      width = 8;
+      break;
+    default:
+      // 0xFB is the NULL marker and 0xFF is undefined; neither is a length.
+      return Status::kInvalidMetadata;
+  }
+  if (size - 1 < width) return Status::kTruncated;
+  switch (width) {
+    case 2:
+      *value = ReadU16Le(data + 1);
+      break;
+    case 3:
+      *value = ReadU24Le(data + 1);
+      break;
+    default:
+      *value = ReadU64Le(data + 1);
+      break;
+  }
+  *consumed = 1 + width;
+  return Status::kOk;
+}
 
 /**
  * @brief Bytes needed for a bitmap of @p bit_count bits.
@@ -108,7 +148,7 @@ inline bool BitmapIsSet(const uint8_t* bitmap, size_t bit_index) {
 /** @brief Bounds-checked forward cursor over a byte range. */
 class ByteReader {
  public:
-  ByteReader(const uint8_t* data, size_t len) : data_(data), remaining_(len) {}
+  ByteReader(const uint8_t* data, size_t size) : data_(data), remaining_(size) {}
 
   /** @brief Bytes not yet consumed. */
   size_t remaining() const { return remaining_; }
@@ -116,7 +156,7 @@ class ByteReader {
   const uint8_t* position() const { return data_; }
 
   /** @brief Advance @p n bytes; kTruncated if fewer remain. */
-  Status Skip(size_t n) {
+  [[nodiscard]] Status Skip(size_t n) {
     if (remaining_ < n) return Status::kTruncated;
     data_ += n;
     remaining_ -= n;
@@ -124,7 +164,7 @@ class ByteReader {
   }
 
   /** @brief Point @p out at the next @p n bytes and advance past them. */
-  Status ReadBytes(size_t n, const uint8_t** out) {
+  [[nodiscard]] Status ReadBytes(size_t n, const uint8_t** out) {
     if (remaining_ < n) return Status::kTruncated;
     *out = data_;
     data_ += n;
@@ -132,15 +172,15 @@ class ByteReader {
     return Status::kOk;
   }
 
-  Status ReadU8(uint8_t* out) { return Fixed(1, out, &mybinlog::ReadU8); }
-  Status ReadU16Le(uint16_t* out) { return Fixed(2, out, &mybinlog::ReadU16Le); }
-  Status ReadU24Le(uint32_t* out) { return Fixed(3, out, &mybinlog::ReadU24Le); }
-  Status ReadU32Le(uint32_t* out) { return Fixed(4, out, &mybinlog::ReadU32Le); }
-  Status ReadU48Le(uint64_t* out) { return Fixed(6, out, &mybinlog::ReadU48Le); }
-  Status ReadU64Le(uint64_t* out) { return Fixed(8, out, &mybinlog::ReadU64Le); }
+  [[nodiscard]] Status ReadU8(uint8_t* out) { return Fixed(1, out, &mybinlog::ReadU8); }
+  [[nodiscard]] Status ReadU16Le(uint16_t* out) { return Fixed(2, out, &mybinlog::ReadU16Le); }
+  [[nodiscard]] Status ReadU24Le(uint32_t* out) { return Fixed(3, out, &mybinlog::ReadU24Le); }
+  [[nodiscard]] Status ReadU32Le(uint32_t* out) { return Fixed(4, out, &mybinlog::ReadU32Le); }
+  [[nodiscard]] Status ReadU48Le(uint64_t* out) { return Fixed(6, out, &mybinlog::ReadU48Le); }
+  [[nodiscard]] Status ReadU64Le(uint64_t* out) { return Fixed(8, out, &mybinlog::ReadU64Le); }
 
   /** @brief Read a packed integer; see ReadPackedInt(). */
-  Status ReadPacked(uint64_t* out) {
+  [[nodiscard]] Status ReadPacked(uint64_t* out) {
     size_t consumed = 0;
     const Status status = ReadPackedInt(data_, remaining_, out, &consumed);
     if (status != Status::kOk) return status;
@@ -165,4 +205,4 @@ class ByteReader {
 
 }  // namespace mybinlog
 
-#endif  // MYBINLOG_BYTES_H_
+#endif  // MYBINLOG_BYTES_INTERNAL_H_

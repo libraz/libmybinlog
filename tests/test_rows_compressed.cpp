@@ -68,7 +68,7 @@ Status DecodeOne(const TableMapColumn& column, const Bytes& value, Value* out,
   Writer w;
   w.Le(1, 6).Le(0, 2).Le(2, 2).U8(1).U8(0x01).U8(0x00).Raw(value);
   const Bytes body(w.bytes.begin(), w.bytes.end());
-  RowsEventData data;
+  RowsEvent data;
   const Status status =
       DecodeRowsEvent(WriteRowsHeader(), body.data(), body.size(), table, options, &data);
   if (status != Status::kOk) return status;
@@ -260,7 +260,7 @@ TEST(CodecRowsCompressed, BombAcrossColumnsStaysWithinTheBudget) {
   budget.limit = kBudget;
   DecodeOptions options;
   options.budget = &budget;
-  RowsEventData data;
+  RowsEvent data;
   EXPECT_EQ(
       DecodeRowsEvent(WriteRowsHeader(), w.bytes.data(), w.bytes.size(), table, options, &data),
       Status::kLimitExceeded);
@@ -354,7 +354,7 @@ TEST(CodecRowsCompressed, CharsetMatrixInOneRow) {
       table.columns.push_back(Column(encoding.type, encoding.meta, state.known, state.collation));
       w.Raw(Frame(encoding.framing));
     }
-    RowsEventData data;
+    RowsEvent data;
     ASSERT_EQ(DecodeRowsEvent(WriteRowsHeader(), w.bytes.data(), w.bytes.size(), table,
                               DecodeOptions(), &data),
               Status::kOk);

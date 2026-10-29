@@ -13,7 +13,7 @@
 #include <system_error>
 #include <vector>
 
-#include "mybinlog/bytes.h"
+#include "bytes_internal.h"
 #include "mybinlog/checksum.h"
 #include "mybinlog/event_header.h"
 #include "mybinlog/event_types.h"
@@ -78,14 +78,15 @@ void DecodeFixture(const FixtureCase& fixture, Decoded* out) {
 
     if (header.type_code == static_cast<uint8_t>(EventType::kTableMapEvent)) {
       TableMap map;
-      ASSERT_EQ(ParseTableMap(body, layout.body_length(), fixture.flavor, &map), Status::kOk);
+      ASSERT_EQ(ParseTableMapEvent(header, body, layout.body_length(), fixture.flavor, &map),
+                Status::kOk);
       tables[map.table_id] = map;
     } else if (IsRowsEvent(header.type_code)) {
       ASSERT_GE(layout.body_length(), 6u);
       const auto table = tables.find(ReadU48Le(body));
       ASSERT_NE(table, tables.end());
       ASSERT_EQ(table->second.table, "t");
-      RowsEventData data;
+      RowsEvent data;
       ASSERT_EQ(DecodeRowsEvent(header, body, layout.body_length(), table->second, DecodeOptions(),
                                 &data),
                 Status::kOk);
@@ -349,7 +350,8 @@ TEST(CodecFixturesRows, ColumnSelectionSkipsWithoutMisaligning) {
       const uint8_t* body = file.data() + pos + kEventHeaderSize;
       if (header.type_code == static_cast<uint8_t>(EventType::kTableMapEvent)) {
         TableMap map;
-        ASSERT_EQ(ParseTableMap(body, layout.body_length(), fixture.flavor, &map), Status::kOk);
+        ASSERT_EQ(ParseTableMapEvent(header, body, layout.body_length(), fixture.flavor, &map),
+                  Status::kOk);
         tables[map.table_id] = map;
       } else if (IsRowsEvent(header.type_code)) {
         const auto found = tables.find(ReadU48Le(body));
@@ -360,8 +362,8 @@ TEST(CodecFixturesRows, ColumnSelectionSkipsWithoutMisaligning) {
         options.columns.assign(table.columns.size(), false);
         options.columns.front() = true;
         options.columns.back() = true;
-        RowsEventData selected;
-        RowsEventData full;
+        RowsEvent selected;
+        RowsEvent full;
         ASSERT_EQ(DecodeRowsEvent(header, body, layout.body_length(), table, options, &selected),
                   Status::kOk);
         ASSERT_EQ(

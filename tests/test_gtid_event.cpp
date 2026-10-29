@@ -371,7 +371,10 @@ TEST(CodecGtid, TaggedEventFromRealCapture) {
     bool saw_previous = false;
     for (const Frame& frame : frames) {
       if (frame.header.type_code == static_cast<uint8_t>(EventType::kPreviousGtidsEvent)) {
-        ASSERT_EQ(GtidSet::DecodeBinary(frame.body, frame.body_length, &previous), Status::kOk);
+        PreviousGtidsEvent event;
+        ASSERT_EQ(ParsePreviousGtidsEvent(frame.header, frame.body, frame.body_length, &event),
+                  Status::kOk);
+        previous = std::move(event.gtids);
         saw_previous = true;
         continue;
       }
@@ -439,9 +442,10 @@ TEST(CodecGtid, MariaDbEventsFromRealCapture) {
     for (const Frame& frame : frames) {
       switch (static_cast<EventType>(frame.header.type_code)) {
         case EventType::kMariaDBGtidListEvent: {
-          MariaDbGtidPosition position;
-          ASSERT_EQ(ParseGtidListEvent(frame.body, frame.body_length, &position), Status::kOk);
-          EXPECT_TRUE(position.empty());  // First binlog of a fresh server.
+          MariaDbGtidListEvent list;
+          ASSERT_EQ(ParseMariaDbGtidListEvent(frame.header, frame.body, frame.body_length, &list),
+                    Status::kOk);
+          EXPECT_TRUE(list.gtids.empty());  // First binlog of a fresh server.
           ++lists;
           break;
         }
@@ -453,8 +457,11 @@ TEST(CodecGtid, MariaDbEventsFromRealCapture) {
           break;
         }
         case EventType::kMariaDBAnnotateRowsEvent: {
-          std::string sql;
-          ASSERT_EQ(ExtractAnnotateRows(frame.body, frame.body_length, &sql), Status::kOk);
+          MariaDbAnnotateRowsEvent annotate;
+          ASSERT_EQ(
+              ParseMariaDbAnnotateRowsEvent(frame.header, frame.body, frame.body_length, &annotate),
+              Status::kOk);
+          const std::string& sql = annotate.query;
           EXPECT_TRUE(sql.rfind("INSERT", 0) == 0 || sql.rfind("UPDATE", 0) == 0 ||
                       sql.rfind("DELETE", 0) == 0)
               << sql;

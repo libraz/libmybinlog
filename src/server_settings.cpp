@@ -31,7 +31,7 @@ bool ContainsIgnoreCase(std::string_view haystack, std::string_view needle) {
 
 }  // namespace
 
-const ServerSettingRule kServerSettingRules[kRuleCount] = {
+const std::array<ServerSettingRule, kRuleCount> kServerSettingRules = {{
     {RuleId::kLogBin, true, true, "log_bin", "log_bin", RuleMatch::kEquals, "ON", "ON"},
     {RuleId::kGtidMode, true, false, "gtid_mode", nullptr, RuleMatch::kEquals, "ON", "ON"},
     {RuleId::kBinlogFormat, true, true, "binlog_format", "binlog_format", RuleMatch::kEquals, "ROW",
@@ -50,7 +50,7 @@ const ServerSettingRule kServerSettingRules[kRuleCount] = {
      RuleMatch::kEquals, "FULL", "FULL"},
     {RuleId::kLogReplicaUpdates, true, true, "log_replica_updates", "log_slave_updates",
      RuleMatch::kEquals, "ON", "ON"},
-};
+}};
 
 const ServerSettingRule& GetRule(RuleId id) noexcept {
   return kServerSettingRules[static_cast<size_t>(id)];

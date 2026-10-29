@@ -16,6 +16,7 @@
 #include <string>
 
 #include "mybinlog/event_types.h"
+#include "mybinlog/export.h"
 
 namespace mybinlog {
 
@@ -58,21 +59,25 @@ struct Value {
     kBytes,      ///< Binary data, or character data whose collation is unknown, in #bytes.
   };
 
-  Kind kind = Kind::kNull;
+  Kind kind = Kind::kNull;  ///< Which members below are meaningful.
   /** Column type: RealType() of the column, so ENUM and SET read kEnum / kSet. */
   ColumnType type = ColumnType::kLong;
-  int64_t i = 0;
-  uint64_t u = 0;
-  double d = 0.0;
-  Temporal t;
-  int64_t epoch_seconds = 0;
-  uint32_t microsecond = 0;
-  uint8_t fsp = 0;
-  std::string bytes;
+  int64_t i = 0;              ///< kInt.
+  uint64_t u = 0;             ///< kUInt, kYear, kEnum, kSet, kBit.
+  double d = 0.0;             ///< kDouble.
+  Temporal t;                 ///< kDate, kDateTime, kTime.
+  int64_t epoch_seconds = 0;  ///< kTimestamp: seconds since the epoch, UTC.
+  uint32_t microsecond = 0;   ///< kTimestamp: fraction, 0..999999.
+  uint8_t fsp = 0;            ///< kTimestamp: declared fractional-second precision, 0..6.
+  std::string bytes;          ///< kDecimal, kText, kBytes.
 };
 
-/** @brief Stable identifier of @p kind (e.g. "kDecimal"), for logs and messages. */
-const char* ValueKindName(Value::Kind kind) noexcept;
+/**
+ * @brief Stable identifier of a value kind, for logs and messages.
+ * @param kind Any value, including one outside the enumerators.
+ * @return Static string such as "kDecimal"; never null. Reentrant.
+ */
+[[nodiscard]] MYBINLOG_API const char* ValueKindName(Value::Kind kind) noexcept;
 
 }  // namespace mybinlog
 

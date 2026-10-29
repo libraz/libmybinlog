@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "mybinlog/event_header.h"
+#include "mybinlog/event_types.h"
 #include "mybinlog/query_event.h"
 #include "mybinlog/status.h"
 
@@ -43,8 +45,14 @@ Bytes QueryBody(const Bytes& status_vars, const std::string& schema, const std::
   return b;
 }
 
+EventHeader QueryHeader() {
+  EventHeader header;
+  header.type_code = static_cast<uint8_t>(EventType::kQueryEvent);
+  return header;
+}
+
 Status Parse(const Bytes& body, QueryEvent* out) {
-  return ParseQueryEvent(body.data(), body.size(), out);
+  return ParseQueryEvent(QueryHeader(), body.data(), body.size(), out);
 }
 
 // Q_SQL_MODE_CODE with ANSI_QUOTES | NO_BACKSLASH_ESCAPES.
@@ -233,7 +241,7 @@ TEST(CodecQueryEvent, TruncatedBodyIsTruncated) {
   for (size_t len = 0; len < body.size(); ++len) {
     SCOPED_TRACE(len);
     QueryEvent event;
-    EXPECT_EQ(ParseQueryEvent(body.data(), len, &event), Status::kTruncated);
+    EXPECT_EQ(ParseQueryEvent(QueryHeader(), body.data(), len, &event), Status::kTruncated);
   }
 }
 
@@ -247,7 +255,7 @@ TEST(CodecQueryEvent, StatusVarsLengthPastTheBodyIsTruncated) {
 
 TEST(CodecQueryEvent, NullBodyIsTruncated) {
   QueryEvent event;
-  EXPECT_EQ(ParseQueryEvent(nullptr, 64, &event), Status::kTruncated);
+  EXPECT_EQ(ParseQueryEvent(QueryHeader(), nullptr, 64, &event), Status::kTruncated);
 }
 
 TEST(CodecQueryEvent, OutputUntouchedOnFailure) {

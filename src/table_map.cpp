@@ -4,7 +4,7 @@
 #include <limits>
 #include <utility>
 
-#include "mybinlog/bytes.h"
+#include "bytes_internal.h"
 
 namespace mybinlog {
 
@@ -371,9 +371,10 @@ ColumnType RealType(const TableMapColumn& column) noexcept {
   return column.type;
 }
 
-Status ParseTableMap(const uint8_t* body, size_t len, ServerFlavor flavor, TableMap* out) {
+Status ParseTableMapEvent(const EventHeader& /*header*/, const uint8_t* body, size_t size,
+                          ServerFlavor flavor, TableMap* out) {
   if (body == nullptr) return Status::kTruncated;
-  ByteReader reader(body, len);
+  ByteReader reader(body, size);
   TableMap map;
 
   Status status = reader.ReadU48Le(&map.table_id);

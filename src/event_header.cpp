@@ -1,17 +1,17 @@
 #include "mybinlog/event_header.h"
 
-#include "mybinlog/bytes.h"
+#include "bytes_internal.h"
 
 namespace mybinlog {
 
-Status ParseEventHeader(const uint8_t* data, size_t len, EventHeader* header) {
-  if (data == nullptr || len < kEventHeaderSize) return Status::kTruncated;
-  header->timestamp = ReadU32Le(data);
-  header->type_code = ReadU8(data + 4);
-  header->server_id = ReadU32Le(data + 5);
-  header->event_length = ReadU32Le(data + 9);
-  header->next_position = ReadU32Le(data + 13);
-  header->flags = ReadU16Le(data + 17);
+Status ParseEventHeader(const uint8_t* data, size_t size, EventHeader* out) {
+  if (data == nullptr || size < kEventHeaderSize) return Status::kTruncated;
+  out->timestamp = ReadU32Le(data);
+  out->type_code = ReadU8(data + 4);
+  out->server_id = ReadU32Le(data + 5);
+  out->event_length = ReadU32Le(data + 9);
+  out->next_position = ReadU32Le(data + 13);
+  out->flags = ReadU16Le(data + 17);
   return Status::kOk;
 }
 

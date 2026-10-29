@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "mybinlog/event_header.h"
 #include "mybinlog/event_types.h"
 #include "mybinlog/server_flavor.h"
 #include "mybinlog/status.h"
@@ -15,6 +16,12 @@
 
 namespace mybinlog {
 namespace {
+
+EventHeader TableMapHeader() {
+  EventHeader header;
+  header.type_code = static_cast<uint8_t>(EventType::kTableMapEvent);
+  return header;
+}
 
 constexpr uint8_t T(ColumnType type) { return static_cast<uint8_t>(type); }
 
@@ -105,7 +112,7 @@ TableMapBuilder Columns(const std::vector<uint8_t>& types, const std::vector<uin
 }
 
 Status Parse(const TableMapBuilder& b, TableMap* out, ServerFlavor flavor = ServerFlavor::kMySQL) {
-  return ParseTableMap(b.Data().data(), b.Size(), flavor, out);
+  return ParseTableMapEvent(TableMapHeader(), b.Data().data(), b.Size(), flavor, out);
 }
 
 // --- Fixed part and per-column metadata ---
@@ -516,12 +523,14 @@ TEST(CodecTableMap, RejectsAMetadataBlockThatDoesNotMatchTheColumnTypes) {
 TEST(CodecTableMap, ParseTruncatedBuffer) {
   const uint8_t buf[5] = {0};
   TableMap map;
-  EXPECT_EQ(ParseTableMap(buf, sizeof(buf), ServerFlavor::kMySQL, &map), Status::kTruncated);
+  EXPECT_EQ(ParseTableMapEvent(TableMapHeader(), buf, sizeof(buf), ServerFlavor::kMySQL, &map),
+            Status::kTruncated);
 }
 
 TEST(CodecTableMap, ParseNullData) {
   TableMap map;
-  EXPECT_EQ(ParseTableMap(nullptr, 100, ServerFlavor::kMySQL, &map), Status::kTruncated);
+  EXPECT_EQ(ParseTableMapEvent(TableMapHeader(), nullptr, 100, ServerFlavor::kMySQL, &map),
+            Status::kTruncated);
 }
 
 TEST(CodecTableMap, OutputUntouchedOnFailure) {
@@ -690,7 +699,9 @@ TEST(CodecTableMapRules, TruncationAnywhereInTheFixedPartIsTruncated) {
   for (size_t len = 0; len < b.Size(); ++len) {
     SCOPED_TRACE(len);
     TableMap map;
-    EXPECT_EQ(ParseTableMap(b.Data().data(), len, ServerFlavor::kMySQL, &map), Status::kTruncated);
+    EXPECT_EQ(
+        ParseTableMapEvent(TableMapHeader(), b.Data().data(), len, ServerFlavor::kMySQL, &map),
+        Status::kTruncated);
   }
 }
 

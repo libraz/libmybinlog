@@ -17,6 +17,8 @@
 #include <cstdint>
 #include <string>
 
+#include "mybinlog/event_header.h"
+#include "mybinlog/export.h"
 #include "mybinlog/status.h"
 
 namespace mybinlog {
@@ -30,29 +32,31 @@ struct QueryCharset {
 
 /** @brief Parsed QUERY_EVENT. */
 struct QueryEvent {
-  uint32_t thread_id = 0;
-  uint32_t exec_time = 0;  ///< Seconds.
-  uint16_t error_code = 0;
-  std::string schema;  ///< Default database; empty when none.
-  std::string query;
+  uint32_t thread_id = 0;     ///< Connection id of the session that ran the statement.
+  uint32_t exec_time = 0;     ///< Execution time in seconds.
+  uint16_t error_code = 0;    ///< Error the statement raised on the source; 0 for none.
+  std::string schema;         ///< Default database; empty when none.
+  std::string query;          ///< Statement text, bytes verbatim.
   bool has_sql_mode = false;  ///< Q_SQL_MODE_CODE was reached.
-  uint64_t sql_mode = 0;
-  bool has_charset = false;  ///< Q_CHARSET_CODE was reached.
-  QueryCharset charset;
+  uint64_t sql_mode = 0;      ///< Session sql_mode bits; meaningful when #has_sql_mode.
+  bool has_charset = false;   ///< Q_CHARSET_CODE was reached.
+  QueryCharset charset;       ///< Session collations; meaningful when #has_charset.
   /** The walk reached the end of the status variables (no unknown code). */
   bool status_vars_complete = false;
 };
 
 /**
  * @brief Parse a QUERY_EVENT body (13-byte post-header).
+ * @param header Header of the event; not consulted by the current layout.
  * @param body Bytes after the common header.
- * @param len Body length, checksum trailer excluded.
- * @param[out] out Filled on success; untouched on failure.
+ * @param size Body length, checksum trailer excluded.
+ * @param[out] out Filled on kOk; untouched otherwise.
  * @return kOk; kTruncated when the body ends early (or @p body is null);
  *   kInvalidMetadata when a known status variable runs past the status block
- *   or is malformed.
+ *   or is malformed. Reentrant.
  */
-Status ParseQueryEvent(const uint8_t* body, size_t len, QueryEvent* out);
+[[nodiscard]] MYBINLOG_API Status ParseQueryEvent(const EventHeader& header, const uint8_t* body,
+                                                  size_t size, QueryEvent* out);
 
 }  // namespace mybinlog
 

@@ -9,21 +9,31 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "mybinlog/export.h"
+
 namespace mybinlog {
 
 /**
- * @brief Extend a running CRC32 with @p length bytes.
+ * @brief Extend a running CRC32 over more bytes.
  *
- * Inputs longer than zlib's `uInt` are fed in chunks, so any `size_t` length
+ * Inputs longer than zlib's `uInt` are fed in chunks, so any `size_t` size
  * yields the true CRC.
  *
  * @param crc Previous value; 0 starts a new checksum.
+ * @param data Bytes to add; may be null when @p size is 0.
+ * @param size Bytes readable at @p data.
+ * @return The updated CRC32. Reentrant.
  */
-uint32_t UpdateCrc32(uint32_t crc, const void* data, size_t length);
+[[nodiscard]] MYBINLOG_API uint32_t UpdateCrc32(uint32_t crc, const void* data, size_t size);
 
-/** @brief CRC32 of @p length bytes at @p data (`data` may be null when `length` is 0). */
-inline uint32_t ComputeCrc32(const void* data, size_t length) {
-  return UpdateCrc32(0, data, length);
+/**
+ * @brief CRC32 of a byte range.
+ * @param data Bytes to checksum; may be null when @p size is 0.
+ * @param size Bytes readable at @p data.
+ * @return The CRC32 of the range. Reentrant.
+ */
+[[nodiscard]] inline uint32_t ComputeCrc32(const void* data, size_t size) {
+  return UpdateCrc32(0, data, size);
 }
 
 }  // namespace mybinlog

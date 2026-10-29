@@ -12,6 +12,8 @@
 
 #include <cstdint>
 
+#include "mybinlog/export.h"
+
 namespace mybinlog {
 
 /** @brief Binlog event type code (header byte 4). */
@@ -71,19 +73,33 @@ enum class EventType : uint8_t {
 };
 
 /**
- * @brief Upstream name of an event type code (e.g. "ROTATE_EVENT").
- * @return The name, or "UNKNOWN" for a code outside EventType.
+ * @brief Upstream name of an event type code.
+ * @param type_code Header byte 4; any value is accepted.
+ * @return Static string such as "ROTATE_EVENT", or "UNKNOWN" for a code
+ *   outside EventType; never null. Reentrant.
  */
-const char* EventTypeName(uint8_t type_code) noexcept;
+[[nodiscard]] MYBINLOG_API const char* EventTypeName(uint8_t type_code) noexcept;
 
-/** @brief EventTypeName() for an enumerator. */
-const char* EventTypeName(EventType type) noexcept;
+/**
+ * @brief EventTypeName(uint8_t) for an enumerator.
+ * @param type Event type.
+ * @return Static string, never null. Reentrant.
+ */
+[[nodiscard]] MYBINLOG_API const char* EventTypeName(EventType type) noexcept;
 
-/** @brief Whether @p type_code is an uncompressed MySQL rows event (v1 23-25 or v2 30-32). */
-bool IsRowsEvent(uint8_t type_code) noexcept;
+/**
+ * @brief Whether a type code is an uncompressed MySQL rows event.
+ * @param type_code Header byte 4.
+ * @return true for WRITE/UPDATE/DELETE_ROWS v1 (23-25) and v2 (30-32). Reentrant.
+ */
+[[nodiscard]] MYBINLOG_API bool IsRowsEvent(uint8_t type_code) noexcept;
 
-/** @brief IsRowsEvent() for an enumerator. */
-bool IsRowsEvent(EventType type) noexcept;
+/**
+ * @brief IsRowsEvent(uint8_t) for an enumerator.
+ * @param type Event type.
+ * @return true for the six uncompressed rows event types. Reentrant.
+ */
+[[nodiscard]] MYBINLOG_API bool IsRowsEvent(EventType type) noexcept;
 
 /// @name Common-header flags (header bytes 17-18)
 /// @{

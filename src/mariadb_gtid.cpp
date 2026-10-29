@@ -3,8 +3,9 @@
 #include <algorithm>
 #include <charconv>
 #include <map>
+#include <utility>
 
-#include "mybinlog/bytes.h"
+#include "bytes_internal.h"
 
 namespace mybinlog {
 namespace {
@@ -16,6 +17,7 @@ constexpr size_t kGtidEventMinBody = 13;
 constexpr size_t kGtidListEntrySize = 16;
 
 constexpr uint32_t kGtidListCountMask = 0x0FFFFFFFu;
+constexpr unsigned kGtidListFlagsShift = 28;
 
 std::string_view Trim(std::string_view text) {
   constexpr std::string_view kSpace = " \t\n\r";
@@ -106,9 +108,9 @@ bool PositionCovers(const MariaDbGtidPosition& required, const MariaDbGtidPositi
   return true;
 }
 
-Status ParseMariaDbGtidEvent(const EventHeader& header, const uint8_t* body, size_t len,
+Status ParseMariaDbGtidEvent(const EventHeader& header, const uint8_t* body, size_t size,
                              MariaDbGtidEvent* out) {
-  if (len < kGtidEventMinBody) return Status::kTruncated;
+  if (body == nullptr || size < kGtidEventMinBody) return Status::kTruncated;
   MariaDbGtidEvent event;
   event.gtid.sequence_no = ReadU64Le(body);
   event.gtid.domain_id = ReadU32Le(body + 8);
@@ -118,27 +120,31 @@ Status ParseMariaDbGtidEvent(const EventHeader& header, const uint8_t* body, siz
   return Status::kOk;
 }
 
-Status ParseGtidListEvent(const uint8_t* body, size_t len, MariaDbGtidPosition* out) {
-  if (len < 4) return Status::kTruncated;
-  const uint32_t count = ReadU32Le(body) & kGtidListCountMask;
-  if (count > (len - 4) / kGtidListEntrySize) return Status::kTruncated;
-  MariaDbGtidPosition position;
-  position.gtids.reserve(count);
+Status ParseMariaDbGtidListEvent(const EventHeader& /*header*/, const uint8_t* body, size_t size,
+                                 MariaDbGtidListEvent* out) {
+  if (body == nullptr || size < 4) return Status::kTruncated;
+  const uint32_t count_and_flags = ReadU32Le(body);
+  const uint32_t count = count_and_flags & kGtidListCountMask;
+  if (count > (size - 4) / kGtidListEntrySize) return Status::kTruncated;
+  MariaDbGtidListEvent event;
+  event.flags = static_cast<uint8_t>(count_and_flags >> kGtidListFlagsShift);
+  event.gtids.gtids.reserve(count);
   const uint8_t* entry = body + 4;
   for (uint32_t i = 0; i < count; ++i, entry += kGtidListEntrySize) {
     MariaDbGtid gtid;
     gtid.domain_id = ReadU32Le(entry);
     gtid.server_id = ReadU32Le(entry + 4);
     gtid.sequence_no = ReadU64Le(entry + 8);
-    position.gtids.push_back(gtid);
+    event.gtids.gtids.push_back(gtid);
   }
-  *out = std::move(position);
+  *out = std::move(event);
   return Status::kOk;
 }
 
-Status ExtractAnnotateRows(const uint8_t* body, size_t len, std::string* out) {
-  if (len == 0) return Status::kTruncated;
-  out->assign(reinterpret_cast<const char*>(body), len);
+Status ParseMariaDbAnnotateRowsEvent(const EventHeader& /*header*/, const uint8_t* body,
+                                     size_t size, MariaDbAnnotateRowsEvent* out) {
+  if (body == nullptr || size == 0) return Status::kTruncated;
+  out->query.assign(reinterpret_cast<const char*>(body), size);
   return Status::kOk;
 }
 
