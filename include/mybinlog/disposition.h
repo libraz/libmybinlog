@@ -24,12 +24,14 @@ namespace mybinlog {
 enum class Disposition : uint8_t {
   kFraming,   ///< Stream framing (FORMAT_DESCRIPTION, ROTATE, STOP); consumed by the reader.
   kTableMap,  ///< TABLE_MAP; decoded into a table description.
-  kRows,      ///< Uncompressed rows event; decoded and applied.
+  kRows,      ///< Uncompressed rows event, PARTIAL_UPDATE_ROWS included; decoded and applied.
   kGtid,      ///< Position event (MySQL GTID / tagged GTID, MariaDB GTID / GTID_LIST).
   kTransactionBoundary,  ///< XID; commits the open transaction.
   kQuery,                ///< QUERY; BEGIN, DDL or statement text.
-  kDataNeutral,          ///< Informational; skipping it cannot lose a row or a position.
-  kFailClosed,           ///< Cannot be applied and cannot be proven harmless to skip: stop.
+  /** MariaDB compressed QUERY/rows (165-171) or TRANSACTION_PAYLOAD; see compression.h. */
+  kCompressed,
+  kDataNeutral,  ///< Informational; skipping it cannot lose a row or a position.
+  kFailClosed,   ///< Cannot be applied and cannot be proven harmless to skip: stop.
 };
 
 /** @brief A disposition and the static reason it was chosen. */

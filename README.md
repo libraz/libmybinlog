@@ -47,6 +47,8 @@ cmake -S . -B build -DFETCHCONTENT_SOURCE_DIR_LIBMYBINLOG=/path/to/libmybinlog
 
 The tests and googletest are built only when libmybinlog is the top-level project (`-DMYBINLOG_BUILD_TESTS=ON` forces them on).
 
+`-DMYBINLOG_WITH_ZSTD=ON` (the default only at top level) links zstd to expand MySQL's compressed transaction payloads; without it they return `kUnsupported`.
+
 ## Quick start
 
 ```cpp

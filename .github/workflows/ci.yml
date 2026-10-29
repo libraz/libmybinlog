@@ -25,6 +25,12 @@ jobs:
             os: macos-latest
             cc: clang
             cxx: clang++
+          # zstd TRANSACTION_PAYLOAD events must report kUnsupported, not fail the build.
+          - name: linux-gcc-no-zstd
+            os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            cmake_args: -DMYBINLOG_WITH_ZSTD=OFF
     steps:
       - uses: actions/checkout@v7
 
@@ -32,10 +38,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y zlib1g-dev
+          sudo apt-get install -y zlib1g-dev libzstd-dev pkg-config
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install zstd
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} ${{ matrix.cmake_args }}
 
       - name: Build
         run: cmake --build build -j 3

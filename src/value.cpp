@@ -34,6 +34,12 @@ const char* ValueKindName(Value::Kind kind) noexcept {
       return "kText";
     case Value::Kind::kBytes:
       return "kBytes";
+    case Value::Kind::kJson:
+      return "kJson";
+    case Value::Kind::kJsonDiff:
+      return "kJsonDiff";
+    case Value::Kind::kAbsent:
+      return "kAbsent";
   }
   return "kUnknown";
 }

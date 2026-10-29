@@ -27,6 +27,8 @@ const char* DispositionName(Disposition disposition) noexcept {
       return "kTransactionBoundary";
     case Disposition::kQuery:
       return "kQuery";
+    case Disposition::kCompressed:
+      return "kCompressed";
     case Disposition::kDataNeutral:
       return "kDataNeutral";
     case Disposition::kFailClosed:
@@ -52,6 +54,21 @@ EventDisposition ClassifyEvent(EventType type, ServerFlavor flavor) noexcept {
     case EventType::kUpdateRowsEvent:
     case EventType::kDeleteRowsEvent:
       return {Disposition::kRows, "row images"};
+    case EventType::kPartialUpdateRowsEvent:
+      return {Disposition::kRows, "row images whose JSON columns may carry partial updates"};
+    case EventType::kTransactionPayloadEvent:
+      return {Disposition::kCompressed, "transaction events behind a payload header"};
+    case EventType::kMariaDBQueryCompressedEvent:
+    case EventType::kMariaDBWriteRowsCompressedEventV1:
+    case EventType::kMariaDBUpdateRowsCompressedEventV1:
+    case EventType::kMariaDBDeleteRowsCompressedEventV1:
+    case EventType::kMariaDBWriteRowsCompressedEvent:
+    case EventType::kMariaDBUpdateRowsCompressedEvent:
+    case EventType::kMariaDBDeleteRowsCompressedEvent:
+      if (!maria) {
+        return Closed(kForeignFlavor);
+      }
+      return {Disposition::kCompressed, "zlib-compressed QUERY or rows event"};
     case EventType::kGtidLogEvent:
       if (maria) {
         return Closed(kForeignFlavor);
@@ -126,18 +143,6 @@ EventDisposition ClassifyEvent(EventType type, ServerFlavor flavor) noexcept {
       return Closed("transaction without a GTID has no position to record");
     case EventType::kXaPrepareLogEvent:
       return Closed("prepared XA rows cannot be published before XA COMMIT");
-    case EventType::kPartialUpdateRowsEvent:
-      return Closed("partial JSON updates are not decoded");
-    case EventType::kTransactionPayloadEvent:
-      return Closed("compressed transaction payloads are not decoded");
-    case EventType::kMariaDBQueryCompressedEvent:
-    case EventType::kMariaDBWriteRowsCompressedEventV1:
-    case EventType::kMariaDBUpdateRowsCompressedEventV1:
-    case EventType::kMariaDBDeleteRowsCompressedEventV1:
-    case EventType::kMariaDBWriteRowsCompressedEvent:
-    case EventType::kMariaDBUpdateRowsCompressedEvent:
-    case EventType::kMariaDBDeleteRowsCompressedEvent:
-      return Closed("MariaDB compressed events are not decoded");
     case EventType::kMariaDBPartialRowDataEvent:
       return Closed("partial row data is not decoded");
   }

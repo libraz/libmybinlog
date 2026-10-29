@@ -39,10 +39,21 @@ TEST(CodecPolicy, ClassifiesEveryEventType) {
   Expect(EventType::kWriteRowsEvent, D::kRows);
   Expect(EventType::kUpdateRowsEvent, D::kRows);
   Expect(EventType::kDeleteRowsEvent, D::kRows);
+  Expect(EventType::kPartialUpdateRowsEvent, D::kRows);
   Expect(EventType::kGtidLogEvent, D::kGtid, D::kFailClosed);
   Expect(EventType::kGtidTaggedLogEvent, D::kGtid, D::kFailClosed);
   Expect(EventType::kMariaDBGtidEvent, D::kFailClosed, D::kGtid);
   Expect(EventType::kMariaDBGtidListEvent, D::kFailClosed, D::kGtid);
+
+  // Compressed: expanded by compression.h, then classified by their inner type.
+  Expect(EventType::kTransactionPayloadEvent, D::kCompressed);
+  Expect(EventType::kMariaDBQueryCompressedEvent, D::kFailClosed, D::kCompressed);
+  Expect(EventType::kMariaDBWriteRowsCompressedEventV1, D::kFailClosed, D::kCompressed);
+  Expect(EventType::kMariaDBUpdateRowsCompressedEventV1, D::kFailClosed, D::kCompressed);
+  Expect(EventType::kMariaDBDeleteRowsCompressedEventV1, D::kFailClosed, D::kCompressed);
+  Expect(EventType::kMariaDBWriteRowsCompressedEvent, D::kFailClosed, D::kCompressed);
+  Expect(EventType::kMariaDBUpdateRowsCompressedEvent, D::kFailClosed, D::kCompressed);
+  Expect(EventType::kMariaDBDeleteRowsCompressedEvent, D::kFailClosed, D::kCompressed);
 
   // Framing.
   Expect(EventType::kStopEvent, D::kFraming);
@@ -75,15 +86,6 @@ TEST(CodecPolicy, ClassifiesEveryEventType) {
   Expect(EventType::kIncidentEvent, D::kFailClosed);
   Expect(EventType::kAnonymousGtidLogEvent, D::kFailClosed);
   Expect(EventType::kXaPrepareLogEvent, D::kFailClosed);
-  Expect(EventType::kPartialUpdateRowsEvent, D::kFailClosed);
-  Expect(EventType::kTransactionPayloadEvent, D::kFailClosed);
-  Expect(EventType::kMariaDBQueryCompressedEvent, D::kFailClosed);
-  Expect(EventType::kMariaDBWriteRowsCompressedEventV1, D::kFailClosed);
-  Expect(EventType::kMariaDBUpdateRowsCompressedEventV1, D::kFailClosed);
-  Expect(EventType::kMariaDBDeleteRowsCompressedEventV1, D::kFailClosed);
-  Expect(EventType::kMariaDBWriteRowsCompressedEvent, D::kFailClosed);
-  Expect(EventType::kMariaDBUpdateRowsCompressedEvent, D::kFailClosed);
-  Expect(EventType::kMariaDBDeleteRowsCompressedEvent, D::kFailClosed);
   Expect(EventType::kMariaDBPartialRowDataEvent, D::kFailClosed);
   Expect(EventType::kEnumEndEvent, D::kFailClosed);
 }
@@ -135,6 +137,7 @@ TEST(CodecPolicy, DispositionNames) {
   EXPECT_STREQ(DispositionName(D::kGtid), "kGtid");
   EXPECT_STREQ(DispositionName(D::kTransactionBoundary), "kTransactionBoundary");
   EXPECT_STREQ(DispositionName(D::kQuery), "kQuery");
+  EXPECT_STREQ(DispositionName(D::kCompressed), "kCompressed");
   EXPECT_STREQ(DispositionName(D::kDataNeutral), "kDataNeutral");
   EXPECT_STREQ(DispositionName(D::kFailClosed), "kFailClosed");
 }

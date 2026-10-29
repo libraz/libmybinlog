@@ -7,6 +7,7 @@
 #define MYBINLOG_MYBINLOG_H_
 
 #include "mybinlog/checksum.h"
+#include "mybinlog/compression.h"
 #include "mybinlog/crc32.h"
 #include "mybinlog/disposition.h"
 #include "mybinlog/event_header.h"
@@ -14,6 +15,7 @@
 #include "mybinlog/export.h"
 #include "mybinlog/format_description.h"
 #include "mybinlog/heartbeat.h"
+#include "mybinlog/json.h"
 #include "mybinlog/mariadb_gtid.h"
 #include "mybinlog/mysql_gtid.h"
 #include "mybinlog/query_event.h"

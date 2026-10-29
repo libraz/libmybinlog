@@ -2,9 +2,16 @@
 
 include(CMakeFindDependencyMacro)
 
-# A static libmybinlog carries its zlib dependency to the consumer's link.
+# A static libmybinlog carries its zlib and zstd dependencies to the consumer's
+# link; zstd is found the way the build found it, so the target names match.
 if(@MYBINLOG_STATIC@)
   find_dependency(ZLIB)
+  if("@MYBINLOG_ZSTD_FOUND_VIA@" STREQUAL "config")
+    find_dependency(zstd CONFIG)
+  elseif("@MYBINLOG_ZSTD_FOUND_VIA@" STREQUAL "pkg-config")
+    find_dependency(PkgConfig)
+    pkg_check_modules(MYBINLOG_ZSTD REQUIRED QUIET IMPORTED_TARGET libzstd)
+  endif()
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/mybinlogTargets.cmake")

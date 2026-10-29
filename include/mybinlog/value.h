@@ -7,6 +7,7 @@
  * TIMESTAMP stays as epoch seconds, DECIMAL is its exact decimal text (`-0.00`
  * kept), ENUM/SET are an ordinal/bitmask whose labels live in TableMap, and
  * JSON, GEOMETRY, VECTOR and TYPED_ARRAY are the raw bytes of their payload.
+ * MySQL binary JSON is decoded on demand by the functions in json.h.
  */
 
 #ifndef MYBINLOG_VALUE_H_
@@ -57,6 +58,9 @@ struct Value {
     kBit,        ///< BIT value in #u.
     kText,       ///< Character data in a non-binary collation, in #bytes.
     kBytes,      ///< Binary data, or character data whose collation is unknown, in #bytes.
+    kJson,       ///< MySQL binary JSON in #bytes, as stored; see ParseJsonBinary().
+    kJsonDiff,   ///< PARTIAL_UPDATE_ROWS after image: the column's raw JSON diff bytes in #bytes.
+    kAbsent,     ///< Column left out of a MINIMAL or NOBLOB row image; not SQL NULL.
   };
 
   Kind kind = Kind::kNull;  ///< Which members below are meaningful.
@@ -69,7 +73,7 @@ struct Value {
   int64_t epoch_seconds = 0;  ///< kTimestamp: seconds since the epoch, UTC.
   uint32_t microsecond = 0;   ///< kTimestamp: fraction, 0..999999.
   uint8_t fsp = 0;            ///< kTimestamp: declared fractional-second precision, 0..6.
-  std::string bytes;          ///< kDecimal, kText, kBytes.
+  std::string bytes;          ///< kDecimal, kText, kBytes, kJson, kJsonDiff.
 };
 
 /**
