@@ -1,0 +1,279 @@
+{
+  "description": "Temporal value decoding. Rows are implemented by CodecRowsTemporal.PairwiseModel in the same order (value classes are defined in tests/test_rows_temporal.cpp); mandatory rows are separate tests.",
+  "generator": {
+    "tool": "coverwise pairwise_generate",
+    "strength": 2,
+    "seed": 1
+  },
+  "model": {
+    "type": [
+      "DATE",
+      "DATETIME",
+      "DATETIME2",
+      "TIME",
+      "TIME2",
+      "TIMESTAMP2",
+      "YEAR"
+    ],
+    "fsp": [
+      0,
+      1,
+      3,
+      6
+    ],
+    "sign": [
+      "positive",
+      "negative"
+    ],
+    "value_class": [
+      "zero",
+      "partial_zero",
+      "min",
+      "max",
+      "out_of_range"
+    ]
+  },
+  "constraints": [
+    "IF type IN {DATE, DATETIME, TIME, YEAR} THEN fsp = 0",
+    "IF sign = negative THEN type IN {TIME, TIME2}",
+    "IF value_class = partial_zero THEN type IN {DATE, DATETIME, DATETIME2}",
+    "IF type = YEAR THEN value_class != out_of_range",
+    "IF sign = negative THEN value_class != zero",
+    "IF type = TIMESTAMP2 AND value_class = out_of_range THEN fsp != 0"
+  ],
+  "columns": [
+    "type",
+    "fsp",
+    "sign",
+    "value_class"
+  ],
+  "rows": [
+    [
+      "DATETIME2",
+      3,
+      "positive",
+      "max"
+    ],
+    [
+      "DATE",
+      0,
+      "positive",
+      "max"
+    ],
+    [
+      "TIME",
+      0,
+      "positive",
+      "out_of_range"
+    ],
+    [
+      "TIME",
+      0,
+      "negative",
+      "max"
+    ],
+    [
+      "TIME2",
+      3,
+      "negative",
+      "min"
+    ],
+    [
+      "DATETIME2",
+      1,
+      "positive",
+      "min"
+    ],
+    [
+      "DATETIME",
+      0,
+      "positive",
+      "zero"
+    ],
+    [
+      "TIMESTAMP2",
+      3,
+      "positive",
+      "zero"
+    ],
+    [
+      "DATE",
+      0,
+      "positive",
+      "partial_zero"
+    ],
+    [
+      "DATETIME",
+      0,
+      "positive",
+      "min"
+    ],
+    [
+      "TIME2",
+      6,
+      "positive",
+      "max"
+    ],
+    [
+      "YEAR",
+      0,
+      "positive",
+      "zero"
+    ],
+    [
+      "TIMESTAMP2",
+      1,
+      "positive",
+      "max"
+    ],
+    [
+      "TIME",
+      0,
+      "negative",
+      "min"
+    ],
+    [
+      "DATE",
+      0,
+      "positive",
+      "zero"
+    ],
+    [
+      "TIME2",
+      3,
+      "negative",
+      "out_of_range"
+    ],
+    [
+      "TIME2",
+      6,
+      "negative",
+      "out_of_range"
+    ],
+    [
+      "TIME",
+      0,
+      "positive",
+      "zero"
+    ],
+    [
+      "TIMESTAMP2",
+      1,
+      "positive",
+      "out_of_range"
+    ],
+    [
+      "TIME2",
+      1,
+      "negative",
+      "out_of_range"
+    ],
+    [
+      "TIME2",
+      1,
+      "positive",
+      "zero"
+    ],
+    [
+      "DATE",
+      0,
+      "positive",
+      "min"
+    ],
+    [
+      "YEAR",
+      0,
+      "positive",
+      "max"
+    ],
+    [
+      "DATETIME2",
+      6,
+      "positive",
+      "zero"
+    ],
+    [
+      "DATETIME",
+      0,
+      "positive",
+      "out_of_range"
+    ],
+    [
+      "DATE",
+      0,
+      "positive",
+      "out_of_range"
+    ],
+    [
+      "TIMESTAMP2",
+      6,
+      "positive",
+      "min"
+    ],
+    [
+      "TIME2",
+      0,
+      "positive",
+      "out_of_range"
+    ],
+    [
+      "DATETIME2",
+      0,
+      "positive",
+      "out_of_range"
+    ],
+    [
+      "DATETIME2",
+      3,
+      "positive",
+      "partial_zero"
+    ],
+    [
+      "DATETIME2",
+      1,
+      "positive",
+      "partial_zero"
+    ],
+    [
+      "DATETIME2",
+      6,
+      "positive",
+      "partial_zero"
+    ],
+    [
+      "YEAR",
+      0,
+      "positive",
+      "min"
+    ],
+    [
+      "TIMESTAMP2",
+      0,
+      "positive",
+      "zero"
+    ],
+    [
+      "DATETIME",
+      0,
+      "positive",
+      "max"
+    ],
+    [
+      "DATETIME",
+      0,
+      "positive",
+      "partial_zero"
+    ]
+  ],
+  "coverage": {
+    "tuples": 91,
+    "covered": 91
+  },
+  "mandatory": {
+    "CodecRowsTemporal.Time2NegativeWithFraction": "negative TIME2 at every fsp 1-6, fraction stored complemented",
+    "CodecRowsTemporal.Datetime2ZeroMonthDayConsumesTheFraction": "zero month/day DATETIME2 with a fraction, followed by another column",
+    "CodecRowsCompressed.Method0WithLowBitsIsMalformed": "COMPRESSED header 0x01..0x0F",
+    "CodecRowsCompressed.TrailingCompressedInputIsMalformed": "input left after the zlib stream ends",
+    "CodecRowsCompressed.ZeroOriginalLengthIsMalformed": "zlib header declaring original length 0"
+  }
+}

@@ -1,0 +1,457 @@
+#include "mybinlog/row_decoder.h"
+
+#include <zlib.h>
+
+#include <algorithm>
+#include <cstring>
+#include <limits>
+#include <utility>
+
+#include "decimal_internal.h"
+#include "mybinlog/bytes.h"
+#include "temporal_internal.h"
+
+namespace mybinlog {
+
+namespace {
+
+// Collation id of `binary`: a character column in it holds bytes, not text.
+constexpr uint32_t kBinaryCollation = 63;
+constexpr size_t kUnlimited = std::numeric_limits<size_t>::max();
+constexpr uint32_t kMaxLengthPrefixWidth = 4;
+constexpr size_t kMaxBitBytes = 8;
+// Field_typed_array stores its value like JSON with a fixed 4-byte length.
+constexpr uint32_t kTypedArrayPrefixWidth = 4;
+
+// MariaDB COMPRESSED value header (sql/field_comp.cc): method in the high
+// nibble, bit 3 selects a raw deflate stream, bits 0-2 the original-length width.
+constexpr unsigned kStoredMethod = 0;
+constexpr unsigned kZlibMethod = 8;
+constexpr uint8_t kRawDeflateBit = 0x08;
+constexpr uint8_t kLengthWidthMask = 0x07;
+
+// Ceilings that apply to the value being decoded.
+struct ValueLimits {
+  size_t value;     // Any materialized payload.
+  size_t inflated;  // A decompressed payload (never above value).
+};
+
+ValueLimits LimitsFor(const DecodeOptions& options) {
+  size_t value = options.max_value_bytes == 0 ? kUnlimited : options.max_value_bytes;
+  if (options.budget != nullptr) value = std::min(value, options.budget->Remaining());
+  const size_t inflated =
+      options.max_decompressed_bytes == 0 ? value : std::min(value, options.max_decompressed_bytes);
+  return {value, inflated};
+}
+
+bool HoldsBytes(const TableMapColumn& column) {
+  return !column.has_charset || column.charset == kBinaryCollation;
+}
+
+// Length prefix of @p width (1..4) little-endian bytes, then that many bytes.
+Status ReadPrefixed(ByteReader* reader, uint32_t width, const uint8_t** data, size_t* length) {
+  if (width < 1 || width > kMaxLengthPrefixWidth) return Status::kInvalidMetadata;
+  const uint8_t* prefix = nullptr;
+  Status status = reader->ReadBytes(width, &prefix);
+  if (status != Status::kOk) return status;
+  uint64_t value = 0;
+  for (uint32_t i = 0; i < width; ++i) value |= static_cast<uint64_t>(prefix[i]) << (8 * i);
+  if (value > reader->remaining()) return Status::kTruncated;
+  *length = static_cast<size_t>(value);
+  return reader->ReadBytes(*length, data);
+}
+
+Status SetPayload(const uint8_t* data, size_t length, Value::Kind kind, const ValueLimits& limits,
+                  Value* out) {
+  if (length > limits.value) return Status::kLimitExceeded;
+  out->kind = kind;
+  out->bytes.assign(reinterpret_cast<const char*>(data), length);
+  return Status::kOk;
+}
+
+Status Inflate(const uint8_t* data, size_t length, bool raw, size_t original, std::string* out) {
+  if (length > std::numeric_limits<uInt>::max() || original > std::numeric_limits<uInt>::max()) {
+    return Status::kLimitExceeded;
+  }
+  std::string inflated(original, '\0');
+  z_stream stream{};
+  stream.next_in = const_cast<Bytef*>(data);
+  stream.avail_in = static_cast<uInt>(length);
+  stream.next_out = reinterpret_cast<Bytef*>(&inflated[0]);
+  stream.avail_out = static_cast<uInt>(original);
+  if (inflateInit2(&stream, raw ? -MAX_WBITS : MAX_WBITS) != Z_OK) return Status::kLimitExceeded;
+  const int result = inflate(&stream, Z_FINISH);
+  const bool complete = result == Z_STREAM_END && stream.total_out == original;
+  const bool trailing = stream.avail_in != 0;
+  inflateEnd(&stream);
+  if (!complete || trailing) return Status::kMalformedValue;
+  *out = std::move(inflated);
+  return Status::kOk;
+}
+
+// One MariaDB COMPRESSED payload (the bytes after the column's own length
+// prefix). @p field_limit is the column's declared maximum length.
+Status DecodeCompressed(const uint8_t* data, size_t length, size_t field_limit,
+                        const ValueLimits& limits, std::string* out) {
+  if (length == 0) {  // An empty value is stored without a header.
+    out->clear();
+    return Status::kOk;
+  }
+  const uint8_t header = data[0];
+  const unsigned method = header >> 4;
+  if (method == kStoredMethod) {
+    if ((header & 0x0F) != 0) return Status::kMalformedValue;
+    if (length - 1 > limits.value) return Status::kLimitExceeded;
+    out->assign(reinterpret_cast<const char*>(data + 1), length - 1);
+    return Status::kOk;
+  }
+  if (method != kZlibMethod) return Status::kUnsupported;
+
+  const size_t width = header & kLengthWidthMask;
+  if (width == 0 || width > kMaxLengthPrefixWidth || length - 1 <= width) {
+    return Status::kMalformedValue;
+  }
+  uint64_t original = 0;
+  for (size_t i = 0; i < width; ++i) original = (original << 8) | data[1 + i];
+  if (original == 0 || original > field_limit) return Status::kMalformedValue;
+  if (original > limits.inflated) return Status::kLimitExceeded;
+  return Inflate(data + 1 + width, length - 1 - width, (header & kRawDeflateBit) != 0,
+                 static_cast<size_t>(original), out);
+}
+
+// The prefix width of a CHAR / VAR_STRING value: upstream folds length bits
+// 8-9 of a CHAR longer than 255 into the real-type byte (XORed).
+uint32_t StringPrefixWidth(uint32_t meta) {
+  const uint32_t max_length = (((meta >> 4) & 0x300) ^ 0x300) + (meta & 0xFF);
+  return max_length > 255 ? 2 : 1;
+}
+
+Status DecodeInteger(const TableMapColumn& column, ByteReader* reader, size_t width, Value* out) {
+  const uint8_t* data = nullptr;
+  const Status status = reader->ReadBytes(width, &data);
+  if (status != Status::kOk || out == nullptr) return status;
+  uint64_t raw = 0;
+  for (size_t i = 0; i < width; ++i) raw |= static_cast<uint64_t>(data[i]) << (8 * i);
+  if (column.is_unsigned) {
+    out->kind = Value::Kind::kUInt;
+    out->u = raw;
+    return Status::kOk;
+  }
+  const uint64_t sign = uint64_t{1} << (8 * width - 1);
+  out->kind = Value::Kind::kInt;
+  out->i = static_cast<int64_t>((raw ^ sign) - sign);
+  return Status::kOk;
+}
+
+Status DecodeFloating(ByteReader* reader, bool is_double, Value* out) {
+  if (is_double) {
+    uint64_t bits = 0;
+    const Status status = reader->ReadU64Le(&bits);
+    if (status != Status::kOk || out == nullptr) return status;
+    double value = 0;
+    static_assert(sizeof(value) == sizeof(bits), "IEEE double");
+    std::memcpy(&value, &bits, sizeof(value));
+    out->kind = Value::Kind::kDouble;
+    out->d = value;
+    return Status::kOk;
+  }
+  uint32_t bits = 0;
+  const Status status = reader->ReadU32Le(&bits);
+  if (status != Status::kOk || out == nullptr) return status;
+  float value = 0;
+  static_assert(sizeof(value) == sizeof(bits), "IEEE float");
+  std::memcpy(&value, &bits, sizeof(value));
+  out->kind = Value::Kind::kDouble;
+  out->d = static_cast<double>(value);
+  return Status::kOk;
+}
+
+// ENUM (1..2 bytes) or SET (1..8 bytes), little-endian.
+Status DecodeEnumOrSet(ColumnType real, uint32_t meta, ByteReader* reader, Value* out) {
+  const uint32_t width = meta & 0xFF;
+  const uint32_t max_width = real == ColumnType::kEnum ? 2 : 8;
+  if (width < 1 || width > max_width) return Status::kInvalidMetadata;
+  const uint8_t* data = nullptr;
+  const Status status = reader->ReadBytes(width, &data);
+  if (status != Status::kOk || out == nullptr) return status;
+  uint64_t value = 0;
+  for (uint32_t i = 0; i < width; ++i) value |= static_cast<uint64_t>(data[i]) << (8 * i);
+  out->kind = real == ColumnType::kEnum ? Value::Kind::kEnum : Value::Kind::kSet;
+  out->u = value;
+  return Status::kOk;
+}
+
+// BIT(M), metadata `bytes << 8 | bits`: (M + 7) / 8 big-endian bytes.
+Status DecodeBit(uint32_t meta, ByteReader* reader, Value* out) {
+  const size_t bits = static_cast<size_t>((meta >> 8) & 0xFF) * 8 + (meta & 0xFF);
+  const size_t width = (bits + 7) / 8;
+  if (bits == 0 || width > kMaxBitBytes) return Status::kInvalidMetadata;
+  const uint8_t* data = nullptr;
+  const Status status = reader->ReadBytes(width, &data);
+  if (status != Status::kOk || out == nullptr) return status;
+  uint64_t value = 0;
+  for (size_t i = 0; i < width; ++i) value = (value << 8) | data[i];
+  out->kind = Value::Kind::kBit;
+  out->u = value;
+  return Status::kOk;
+}
+
+Status DecodeNewDecimal(uint32_t meta, ByteReader* reader, const ValueLimits& limits, Value* out) {
+  size_t width = 0;
+  Status status = internal::DecimalWidth(meta, &width);
+  if (status != Status::kOk) return status;
+  const uint8_t* data = nullptr;
+  status = reader->ReadBytes(width, &data);
+  if (status != Status::kOk || out == nullptr) return status;
+  status = internal::DecodeDecimal(meta, data, &out->bytes);
+  if (status != Status::kOk) return status;
+  if (out->bytes.size() > limits.value) return Status::kLimitExceeded;
+  out->kind = Value::Kind::kDecimal;
+  return Status::kOk;
+}
+
+Status DecodeTemporalColumn(ColumnType type, uint32_t meta, ByteReader* reader, Value* out) {
+  size_t width = 0;
+  Status status = internal::TemporalWidth(type, meta, &width);
+  if (status != Status::kOk) return status;
+  const uint8_t* data = nullptr;
+  status = reader->ReadBytes(width, &data);
+  if (status != Status::kOk || out == nullptr) return status;
+  return internal::DecodeTemporal(type, meta, data, out);
+}
+
+// A length-prefixed value whose payload is character data or bytes.
+Status DecodeCharacter(const TableMapColumn& column, uint32_t prefix_width, ByteReader* reader,
+                       const ValueLimits& limits, Value* out) {
+  const uint8_t* data = nullptr;
+  size_t length = 0;
+  const Status status = ReadPrefixed(reader, prefix_width, &data, &length);
+  if (status != Status::kOk || out == nullptr) return status;
+  const Value::Kind kind = HoldsBytes(column) ? Value::Kind::kBytes : Value::Kind::kText;
+  return SetPayload(data, length, kind, limits, out);
+}
+
+// A length-prefixed value that is always opaque bytes (JSON, GEOMETRY, VECTOR, TYPED_ARRAY).
+Status DecodeOpaque(uint32_t prefix_width, ByteReader* reader, const ValueLimits& limits,
+                    Value* out) {
+  const uint8_t* data = nullptr;
+  size_t length = 0;
+  const Status status = ReadPrefixed(reader, prefix_width, &data, &length);
+  if (status != Status::kOk || out == nullptr) return status;
+  return SetPayload(data, length, Value::Kind::kBytes, limits, out);
+}
+
+Status DecodeCompressedColumn(const TableMapColumn& column, uint32_t prefix_width,
+                              size_t field_limit, ByteReader* reader, const ValueLimits& limits,
+                              Value* out) {
+  const uint8_t* data = nullptr;
+  size_t length = 0;
+  Status status = ReadPrefixed(reader, prefix_width, &data, &length);
+  if (status != Status::kOk || out == nullptr) return status;
+  status = DecodeCompressed(data, length, field_limit, limits, &out->bytes);
+  if (status != Status::kOk) return status;
+  out->kind = HoldsBytes(column) ? Value::Kind::kBytes : Value::Kind::kText;
+  return Status::kOk;
+}
+
+// Consumes one non-NULL value of @p column. With @p out null the value is
+// only measured: metadata is validated, the payload is not interpreted.
+Status DecodeValue(const TableMapColumn& column, ByteReader* reader, const ValueLimits& limits,
+                   Value* out) {
+  const uint32_t meta = column.meta;
+  switch (column.type) {
+    case ColumnType::kTiny:
+      return DecodeInteger(column, reader, 1, out);
+    case ColumnType::kShort:
+      return DecodeInteger(column, reader, 2, out);
+    case ColumnType::kInt24:
+      return DecodeInteger(column, reader, 3, out);
+    case ColumnType::kLong:
+      return DecodeInteger(column, reader, 4, out);
+    case ColumnType::kLongLong:
+      return DecodeInteger(column, reader, 8, out);
+    case ColumnType::kFloat:
+      return DecodeFloating(reader, false, out);
+    case ColumnType::kDouble:
+      return DecodeFloating(reader, true, out);
+    case ColumnType::kNewDecimal:
+      return DecodeNewDecimal(meta, reader, limits, out);
+    case ColumnType::kBit:
+      return DecodeBit(meta, reader, out);
+
+    case ColumnType::kYear:
+    case ColumnType::kDate:
+    case ColumnType::kNewDate:
+    case ColumnType::kTime:
+    case ColumnType::kDatetime:
+    case ColumnType::kTimestamp:
+    case ColumnType::kTimestamp2:
+    case ColumnType::kDatetime2:
+    case ColumnType::kTime2:
+      return DecodeTemporalColumn(column.type, meta, reader, out);
+
+    case ColumnType::kEnum:
+    case ColumnType::kSet:
+      return DecodeEnumOrSet(column.type, meta, reader, out);
+    case ColumnType::kString: {
+      const ColumnType real = RealType(column);
+      if (real != ColumnType::kString) return DecodeEnumOrSet(real, meta, reader, out);
+      return DecodeCharacter(column, StringPrefixWidth(meta), reader, limits, out);
+    }
+    case ColumnType::kVarString:
+      return DecodeCharacter(column, StringPrefixWidth(meta), reader, limits, out);
+    case ColumnType::kVarchar:
+      return DecodeCharacter(column, meta > 255 ? 2 : 1, reader, limits, out);
+    case ColumnType::kTinyBlob:
+    case ColumnType::kMediumBlob:
+    case ColumnType::kLongBlob:
+    case ColumnType::kBlob:
+      return DecodeCharacter(column, meta, reader, limits, out);
+
+    case ColumnType::kJson:
+    case ColumnType::kGeometry:
+    case ColumnType::kVector:
+      return DecodeOpaque(meta, reader, limits, out);
+    case ColumnType::kTypedArray:
+      return DecodeOpaque(kTypedArrayPrefixWidth, reader, limits, out);
+
+    case ColumnType::kVarcharCompressed:
+      return DecodeCompressedColumn(column, meta > 255 ? 2 : 1, meta, reader, limits, out);
+    case ColumnType::kBlobCompressed: {
+      if (meta < 1 || meta > kMaxLengthPrefixWidth) return Status::kInvalidMetadata;
+      const size_t field_limit = static_cast<size_t>((uint64_t{1} << (8 * meta)) - 1);
+      return DecodeCompressedColumn(column, meta, field_limit, reader, limits, out);
+    }
+
+    case ColumnType::kDecimal:  // Pre-5.0 DECIMAL; no current server writes it.
+      return Status::kUnsupported;
+  }
+  return Status::kUnsupported;
+}
+
+bool AllSet(const uint8_t* bitmap, size_t bits) {
+  for (size_t i = 0; i < bits; ++i) {
+    if (!BitmapIsSet(bitmap, i)) return false;
+  }
+  return true;
+}
+
+bool Selected(const DecodeOptions& options, size_t ordinal) {
+  return options.columns.empty() || (ordinal < options.columns.size() && options.columns[ordinal]);
+}
+
+// One row image: the NULL bitmap, then a value per non-NULL column.
+Status DecodeImage(ByteReader* reader, const TableMap& table, const DecodeOptions& options,
+                   Row* row) {
+  const size_t columns = table.columns.size();
+  const uint8_t* nulls = nullptr;
+  Status status = reader->ReadBytes(BitmapBytes(columns), &nulls);
+  if (status != Status::kOk) return status;
+
+  DecodeBudget* budget = options.budget;
+  if (budget != nullptr && options.per_value_overhead != 0) {
+    if (columns > budget->Remaining() / options.per_value_overhead) return Status::kLimitExceeded;
+    budget->Charge(columns * options.per_value_overhead);
+  }
+
+  row->assign(columns, Value{});
+  for (size_t i = 0; i < columns; ++i) {
+    const TableMapColumn& column = table.columns[i];
+    Value& value = (*row)[i];
+    value.type = RealType(column);
+    if (BitmapIsSet(nulls, i)) continue;
+    const bool selected = Selected(options, i);
+    status = DecodeValue(column, reader, LimitsFor(options), selected ? &value : nullptr);
+    if (status != Status::kOk) return status;
+    if (selected && budget != nullptr && !budget->Charge(value.bytes.size())) {
+      return Status::kLimitExceeded;
+    }
+  }
+  return Status::kOk;
+}
+
+Status ChargeRow(const DecodeOptions& options) {
+  if (options.budget == nullptr || options.budget->Charge(options.per_row_overhead)) {
+    return Status::kOk;
+  }
+  return Status::kLimitExceeded;
+}
+
+}  // namespace
+
+Status DecodeRowsEvent(const EventHeader& header, const uint8_t* body, size_t len,
+                       const TableMap& table, const DecodeOptions& options, RowsEventData* out) {
+  bool v2 = false;
+  bool update = false;
+  switch (static_cast<EventType>(header.type_code)) {
+    case EventType::kWriteRowsEventV1:
+    case EventType::kDeleteRowsEventV1:
+      break;
+    case EventType::kUpdateRowsEventV1:
+      update = true;
+      break;
+    case EventType::kWriteRowsEvent:
+    case EventType::kDeleteRowsEvent:
+      v2 = true;
+      break;
+    case EventType::kUpdateRowsEvent:
+      v2 = update = true;
+      break;
+    default:
+      return Status::kUnsupported;
+  }
+  if (body == nullptr) return Status::kTruncated;
+
+  ByteReader reader(body, len);
+  Status status = reader.Skip(8);  // table_id (6), flags (2)
+  if (status != Status::kOk) return status;
+  if (v2) {
+    // The extra-data length counts its own two bytes.
+    uint16_t extra = 0;
+    status = reader.ReadU16Le(&extra);
+    if (status != Status::kOk) return status;
+    if (extra < 2) return Status::kInvalidMetadata;
+    status = reader.Skip(extra - 2u);
+    if (status != Status::kOk) return status;
+  }
+
+  uint64_t column_count = 0;
+  status = reader.ReadPacked(&column_count);
+  if (status != Status::kOk) return status;
+  if (column_count == 0 || column_count > kMaxTableColumns ||
+      column_count != table.columns.size()) {
+    return Status::kInvalidMetadata;
+  }
+  const size_t columns = static_cast<size_t>(column_count);
+  for (int image = 0; image < (update ? 2 : 1); ++image) {
+    const uint8_t* present = nullptr;
+    status = reader.ReadBytes(BitmapBytes(columns), &present);
+    if (status != Status::kOk) return status;
+    if (!AllSet(present, columns)) return Status::kUnsupported;
+  }
+
+  RowsEventData data;
+  while (reader.remaining() > 0) {
+    if (update) {
+      std::pair<Row, Row> pair;
+      status = DecodeImage(&reader, table, options, &pair.first);
+      if (status != Status::kOk) return status;
+      status = DecodeImage(&reader, table, options, &pair.second);
+      if (status != Status::kOk) return status;
+      status = ChargeRow(options);
+      if (status != Status::kOk) return status;
+      data.updates.push_back(std::move(pair));
+    } else {
+      Row row;
+      status = DecodeImage(&reader, table, options, &row);
+      if (status != Status::kOk) return status;
+      status = ChargeRow(options);
+      if (status != Status::kOk) return status;
+      data.rows.push_back(std::move(row));
+    }
+  }
+  *out = std::move(data);
+  return Status::kOk;
+}
+
+}  // namespace mybinlog
