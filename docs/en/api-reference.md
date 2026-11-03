@@ -6,7 +6,7 @@ This page maps the public headers. The declarations and their Doxygen comments i
 
 - `#include <mybinlog/mybinlog.h>` includes every public header. Each header can also be included on its own.
 - Link the CMake target `mybinlog::mybinlog`, or use `pkg-config mybinlog`. See [Getting started](getting-started.md).
-- Everything is in namespace `mybinlog`. Public functions and classes are marked `MYBINLOG_API` (from the generated `mybinlog/export.h`); in a shared build only these are exported. A static build defines `MYBINLOG_STATIC_DEFINE` for its consumers through the CMake target or `mybinlog.pc`.
+- Everything is in namespace `mybinlog`. Public functions and classes are marked `MYBINLOG_API` (from `mybinlog/export.h`); the shared library exports only these. The static library defines `MYBINLOG_STATIC_DEFINE` for its consumers through the CMake target or `mybinlog-static.pc`.
 - `mybinlog/version.h` is generated at configure time and holds the version macros and `Version()`.
 
 ## Headers

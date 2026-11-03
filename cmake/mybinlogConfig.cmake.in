@@ -1,19 +1,27 @@
 @PACKAGE_INIT@
 
-include(CMakeFindDependencyMacro)
-
-# A static libmybinlog carries its zlib and zstd dependencies to the consumer's
-# link; zstd is found the way the build found it, so the target names match.
-if(@MYBINLOG_STATIC@)
-  find_dependency(ZLIB)
-  if("@MYBINLOG_ZSTD_FOUND_VIA@" STREQUAL "config")
-    find_dependency(zstd CONFIG)
-  elseif("@MYBINLOG_ZSTD_FOUND_VIA@" STREQUAL "pkg-config")
-    find_dependency(PkgConfig)
-    pkg_check_modules(MYBINLOG_ZSTD REQUIRED QUIET IMPORTED_TARGET libzstd)
-  endif()
+# Loads whichever of the static and shared libraries are installed here, then
+# points mybinlog::mybinlog at one: the shared library when BUILD_SHARED_LIBS is
+# ON or it is the only one, the static library otherwise. Nothing in this file
+# depends on how the library was built, so separate static and shared installs
+# can share a prefix.
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/mybinlogStaticTargets.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/mybinlogStaticDependencies.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/mybinlogStaticTargets.cmake")
+endif()
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/mybinlogSharedTargets.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/mybinlogSharedTargets.cmake")
 endif()
 
-include("${CMAKE_CURRENT_LIST_DIR}/mybinlogTargets.cmake")
+if(NOT TARGET mybinlog::mybinlog)
+  if(TARGET mybinlog::mybinlog_shared AND (BUILD_SHARED_LIBS OR NOT TARGET mybinlog::mybinlog_static))
+    set(_mybinlog_default mybinlog::mybinlog_shared)
+  else()
+    set(_mybinlog_default mybinlog::mybinlog_static)
+  endif()
+  add_library(mybinlog::mybinlog INTERFACE IMPORTED)
+  set_target_properties(mybinlog::mybinlog PROPERTIES INTERFACE_LINK_LIBRARIES ${_mybinlog_default})
+  unset(_mybinlog_default)
+endif()
 
 check_required_components(mybinlog)

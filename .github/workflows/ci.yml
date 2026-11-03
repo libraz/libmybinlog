@@ -31,6 +31,12 @@ jobs:
             cc: gcc
             cxx: g++
             cmake_args: -DMYBINLOG_WITH_ZSTD=OFF
+          # Static and shared libraries from one configure, installed into one prefix.
+          - name: linux-gcc-static-shared
+            os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            cmake_args: -DMYBINLOG_BUILD_SHARED=ON
     steps:
       - uses: actions/checkout@v7
 

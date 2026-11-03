@@ -1,10 +1,12 @@
 # Installs an already-built libmybinlog into a scratch prefix, then builds and
-# runs tests/install/consumer against it with find_package (MYBINLOG_MODE
-# find_package) or with pkg-config and the compiler directly (pkg_config).
+# runs tests/install/consumer against its MYBINLOG_KIND library (static or
+# shared) with find_package (MYBINLOG_MODE FindPackage) or with pkg-config and
+# the compiler directly (PkgConfig). Deleting the installed shared library
+# afterwards proves which kind the consumer linked.
 # Run by ctest as `cmake -D<var>=<value>... -P run_install_test.cmake`.
 
 foreach(var MYBINLOG_BUILD_DIR MYBINLOG_CONSUMER_DIR MYBINLOG_FIXTURE MYBINLOG_EXPECTED_VERSION
-            MYBINLOG_LIBRARY_TYPE MYBINLOG_CXX_COMPILER MYBINLOG_GENERATOR MYBINLOG_MODE
+            MYBINLOG_KIND MYBINLOG_CXX_COMPILER MYBINLOG_GENERATOR MYBINLOG_MODE
             MYBINLOG_WORK_DIR)
   if(NOT DEFINED ${var})
     message(FATAL_ERROR "${var} is not set")
@@ -50,11 +52,23 @@ endforeach()
 string(REGEX MATCH "^[0-9]+\\.[0-9]+" major_minor ${MYBINLOG_EXPECTED_VERSION})
 set(expected_output "mybinlog ${MYBINLOG_EXPECTED_VERSION} FORMAT_DESCRIPTION_EVENT 8.4")
 
-if(MYBINLOG_MODE STREQUAL "find_package")
+if(MYBINLOG_KIND STREQUAL "static")
+  set(consumer_shared_libs OFF)
+  set(pc_module mybinlog-static)
+elseif(MYBINLOG_KIND STREQUAL "shared")
+  set(consumer_shared_libs ON)
+  set(pc_module mybinlog)
+else()
+  message(FATAL_ERROR "unknown MYBINLOG_KIND '${MYBINLOG_KIND}'")
+endif()
+
+if(MYBINLOG_MODE STREQUAL "FindPackage")
+  # BUILD_SHARED_LIBS selects which library mybinlog::mybinlog stands for.
   set(build ${MYBINLOG_WORK_DIR}/build)
   run_checked(${CMAKE_COMMAND} -S ${MYBINLOG_CONSUMER_DIR} -B ${build} -G ${MYBINLOG_GENERATOR}
     -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${MYBINLOG_CXX_COMPILER}
-    -DCMAKE_PREFIX_PATH=${prefix} -DMYBINLOG_REQUIRED_VERSION=${major_minor})
+    -DCMAKE_PREFIX_PATH=${prefix} -DMYBINLOG_REQUIRED_VERSION=${major_minor}
+    -DBUILD_SHARED_LIBS=${consumer_shared_libs})
   run_checked(${CMAKE_COMMAND} --build ${build})
   set(consumer ${build}/mybinlog_consumer)
 
@@ -70,31 +84,31 @@ if(MYBINLOG_MODE STREQUAL "find_package")
   if(result EQUAL 0)
     message(FATAL_ERROR "find_package(mybinlog ${major}.${next_minor}) accepted ${major_minor}")
   endif()
-elseif(MYBINLOG_MODE STREQUAL "pkg_config")
+elseif(MYBINLOG_MODE STREQUAL "PkgConfig")
   find_program(pkg_config NAMES pkg-config pkgconf)
   if(NOT pkg_config)
     skip("pkg-config not found")
   endif()
-  file(GLOB_RECURSE pc_files ${prefix}/*/mybinlog.pc)
+  file(GLOB_RECURSE pc_files ${prefix}/*/${pc_module}.pc)
   list(LENGTH pc_files pc_count)
   if(NOT pc_count EQUAL 1)
-    message(FATAL_ERROR "expected one mybinlog.pc under ${prefix}, found: ${pc_files}")
+    message(FATAL_ERROR "expected one ${pc_module}.pc under ${prefix}, found: ${pc_files}")
   endif()
   get_filename_component(pc_dir ${pc_files} DIRECTORY)
   set(pkg ${CMAKE_COMMAND} -E env PKG_CONFIG_PATH=${pc_dir} ${pkg_config})
 
-  run_checked(${pkg} --modversion mybinlog)
+  run_checked(${pkg} --modversion ${pc_module})
   string(STRIP "${RUN_OUTPUT}" modversion)
   if(NOT modversion STREQUAL MYBINLOG_EXPECTED_VERSION)
     message(FATAL_ERROR "pkg-config version ${modversion}, expected ${MYBINLOG_EXPECTED_VERSION}")
   endif()
-  run_checked(${pkg} --cflags mybinlog)
+  run_checked(${pkg} --cflags ${pc_module})
   separate_arguments(cflags UNIX_COMMAND "${RUN_OUTPUT}")
-  # Plain --libs: the install holds one library type, so it must link without --static.
-  run_checked(${pkg} --libs mybinlog)
+  # Plain --libs: mybinlog-static.pc must link the archive without --static.
+  run_checked(${pkg} --libs ${pc_module})
   separate_arguments(libs UNIX_COMMAND "${RUN_OUTPUT}")
-  if(NOT MYBINLOG_LIBRARY_TYPE STREQUAL "STATIC_LIBRARY")
-    run_checked(${pkg} --variable=libdir mybinlog)
+  if(MYBINLOG_KIND STREQUAL "shared")
+    run_checked(${pkg} --variable=libdir ${pc_module})
     string(STRIP "${RUN_OUTPUT}" libdir)
     list(APPEND libs "-Wl,-rpath,${libdir}")
   endif()
@@ -111,3 +125,16 @@ if(NOT found EQUAL 0)
   message(FATAL_ERROR "consumer printed '${RUN_OUTPUT}', expected '${expected_output}...'")
 endif()
 message(STATUS "${RUN_OUTPUT}")
+
+# Without the shared library a static consumer still runs and a shared one cannot.
+file(GLOB shared_libs ${prefix}/lib*/libmybinlog*.so* ${prefix}/lib*/libmybinlog*.dylib)
+if(shared_libs)
+  file(REMOVE ${shared_libs})
+endif()
+execute_process(COMMAND ${consumer} ${MYBINLOG_FIXTURE}
+  RESULT_VARIABLE result OUTPUT_QUIET ERROR_QUIET)
+if(MYBINLOG_KIND STREQUAL "static" AND NOT result EQUAL 0)
+  message(FATAL_ERROR "static consumer needs the shared library (${result})")
+elseif(MYBINLOG_KIND STREQUAL "shared" AND result EQUAL 0)
+  message(FATAL_ERROR "shared consumer ran without the shared library")
+endif()

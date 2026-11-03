@@ -47,24 +47,27 @@ cmake --build build
 cmake --install build --prefix /usr/local
 ```
 
-Add `-DBUILD_SHARED_LIBS=ON` for a shared library. A shared build exports only the public symbols (`MYBINLOG_API`) and carries the major and minor version in its soname.
+This installs the static library. Add `-DBUILD_SHARED_LIBS=ON` for the shared library instead, or `-DMYBINLOG_BUILD_SHARED=ON` to build and install both from one configure. The shared library exports only the public symbols (`MYBINLOG_API`) and carries the major and minor version in its soname. Both are named `libmybinlog`, and every file the two installs have in common is identical, so a static and a shared build can also be installed one after the other into the same prefix.
 
-The install provides a CMake package and a pkg-config file. With CMake:
+The install provides a CMake package and pkg-config files. With CMake:
 
 ```cmake
 find_package(mybinlog CONFIG REQUIRED)
 target_link_libraries(your_target PRIVATE mybinlog::mybinlog)
 ```
 
-A version request in `find_package` matches only installs with the same major and minor number, because a minor release may change the API before 1.0. A static install finds zlib, and zstd when it was built with it, for the consumer's link.
+`mybinlog::mybinlog` is the shared library when the consumer sets `BUILD_SHARED_LIBS` to ON or only the shared library is installed, and the static library otherwise. `mybinlog::mybinlog_static` and `mybinlog::mybinlog_shared` name one of them explicitly. The static target finds zlib, and zstd when it was built with it, for the consumer's link and defines `MYBINLOG_STATIC_DEFINE` for its compile.
+
+A version request in `find_package` matches only installs with the same major and minor number, because a minor release may change the API before 1.0.
 
 With pkg-config:
 
 ```sh
-c++ -std=c++17 app.cpp $(pkg-config --cflags --libs mybinlog)
+c++ -std=c++17 app.cpp $(pkg-config --cflags --libs mybinlog)          # shared
+c++ -std=c++17 app.cpp $(pkg-config --cflags --libs mybinlog-static)   # static
 ```
 
-For a static install, `mybinlog.pc` adds `-DMYBINLOG_STATIC_DEFINE` to the compile flags, `-lz` to the libraries and `libzstd` to `Requires`, so `--static` is not needed.
+`mybinlog.pc` passes `-lmybinlog`, which the linker resolves to the shared library when both are installed; it lists zlib and zstd as private dependencies, so a static-only install links with `pkg-config --static`. `mybinlog-static.pc` is installed with the static library. It names `libmybinlog.a` directly, adds `-DMYBINLOG_STATIC_DEFINE`, zlib and zstd, and links statically without `--static` even next to a shared library.
 
 ## Build options
 
@@ -72,9 +75,11 @@ For a static install, `mybinlog.pc` adds `-DMYBINLOG_STATIC_DEFINE` to the compi
 |---|---|---|
 | `MYBINLOG_BUILD_TESTS` | ON at top level, OFF when included | Builds the unit tests and fetches googletest. |
 | `MYBINLOG_BUILD_EXAMPLES` | ON at top level, OFF when included | Builds `examples/mybinlog-dump`. |
-| `MYBINLOG_INSTALL` | ON at top level, OFF when included | Generates the install rules, `mybinlogConfig.cmake` and `mybinlog.pc`. |
+| `MYBINLOG_INSTALL` | ON at top level, OFF when included | Generates the install rules, `mybinlogConfig.cmake`, `mybinlog.pc` and, with the static library, `mybinlog-static.pc`. |
 | `MYBINLOG_WITH_ZSTD` | ON at top level, OFF when included | Links zstd, found through its CMake package or through pkg-config (`libzstd`). If zstd is not found, configuration prints a warning and zstd payloads decode as `kUnsupported`. |
-| `BUILD_SHARED_LIBS` | OFF | Builds a shared library instead of a static one. |
+| `BUILD_SHARED_LIBS` | OFF | Sets the defaults of the next two options to the shared library alone, and points `mybinlog::mybinlog` at it when both are built. |
+| `MYBINLOG_BUILD_STATIC` | ON unless `BUILD_SHARED_LIBS` | Builds the static library, target `mybinlog::mybinlog_static`. |
+| `MYBINLOG_BUILD_SHARED` | `BUILD_SHARED_LIBS` | Builds the shared library, target `mybinlog::mybinlog_shared`. |
 
 ## A first program
 

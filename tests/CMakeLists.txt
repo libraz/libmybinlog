@@ -26,27 +26,34 @@ if(TARGET mybinlog-dump)
   endforeach()
 endif()
 
-# Installs the built library into a scratch prefix and builds a consumer against it.
+# Installs the build into a scratch prefix and builds a consumer of each built
+# library kind against it; when both kinds are built they share that prefix.
 if(MYBINLOG_INSTALL)
-  get_target_property(MYBINLOG_TEST_LIBRARY_TYPE mybinlog TYPE)
   set(MYBINLOG_INSTALL_TEST_ARGS
     -DMYBINLOG_BUILD_DIR=${PROJECT_BINARY_DIR}
     -DMYBINLOG_CONSUMER_DIR=${CMAKE_CURRENT_SOURCE_DIR}/install/consumer
     -DMYBINLOG_FIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mysql84_crc32_tagged.bin
     -DMYBINLOG_EXPECTED_VERSION=${PROJECT_VERSION}
-    -DMYBINLOG_LIBRARY_TYPE=${MYBINLOG_TEST_LIBRARY_TYPE}
     -DMYBINLOG_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     -DMYBINLOG_GENERATOR=${CMAKE_GENERATOR}
   )
-  add_test(NAME CodecInstall.FindPackage
-    COMMAND ${CMAKE_COMMAND} ${MYBINLOG_INSTALL_TEST_ARGS} -DMYBINLOG_MODE=find_package
-      -DMYBINLOG_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/install-find-package
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/install/run_install_test.cmake)
-  add_test(NAME CodecInstall.PkgConfig
-    COMMAND ${CMAKE_COMMAND} ${MYBINLOG_INSTALL_TEST_ARGS} -DMYBINLOG_MODE=pkg_config
-      -DMYBINLOG_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/install-pkg-config
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/install/run_install_test.cmake)
-  set_tests_properties(CodecInstall.FindPackage CodecInstall.PkgConfig PROPERTIES
+  set(MYBINLOG_INSTALL_TESTS "")
+  foreach(Kind Static Shared)
+    string(TOLOWER ${Kind} kind)
+    if(NOT TARGET mybinlog_${kind})
+      continue()
+    endif()
+    foreach(Mode FindPackage PkgConfig)
+      set(test CodecInstall.${Mode}${Kind})
+      add_test(NAME ${test}
+        COMMAND ${CMAKE_COMMAND} ${MYBINLOG_INSTALL_TEST_ARGS} -DMYBINLOG_MODE=${Mode}
+          -DMYBINLOG_KIND=${kind}
+          -DMYBINLOG_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/install-${Mode}-${kind}
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/install/run_install_test.cmake)
+      list(APPEND MYBINLOG_INSTALL_TESTS ${test})
+    endforeach()
+  endforeach()
+  set_tests_properties(${MYBINLOG_INSTALL_TESTS} PROPERTIES
     TIMEOUT 300
     SKIP_RETURN_CODE 77
     RESOURCE_LOCK mybinlog_install_manifest

@@ -1,0 +1,10 @@
+# Dependencies of the static libmybinlog. zstd is found the way the build found
+# it, so the target names in mybinlogStaticTargets.cmake resolve.
+include(CMakeFindDependencyMacro)
+find_dependency(ZLIB)
+if("@MYBINLOG_ZSTD_FOUND_VIA@" STREQUAL "config")
+  find_dependency(zstd CONFIG)
+elseif("@MYBINLOG_ZSTD_FOUND_VIA@" STREQUAL "pkg-config")
+  find_dependency(PkgConfig)
+  pkg_check_modules(MYBINLOG_ZSTD REQUIRED QUIET IMPORTED_TARGET libzstd)
+endif()

@@ -47,7 +47,7 @@ cmake --build build
 cmake --install build --prefix /usr/local
 ```
 
-共有ライブラリにするには `-DBUILD_SHARED_LIBS=ON` を加えます。共有ビルドは公開シンボル（`MYBINLOG_API`）だけを export し、soname にメジャーとマイナーの版を持ちます。
+これで静的ライブラリが入ります。代わりに共有ライブラリにするには `-DBUILD_SHARED_LIBS=ON` を、1 回の configure で両方をビルドしてインストールするには `-DMYBINLOG_BUILD_SHARED=ON` を加えます。共有ライブラリは公開シンボル（`MYBINLOG_API`）だけを export し、soname にメジャーとマイナーの版を持ちます。どちらも名前は `libmybinlog` で、両方のインストールに共通するファイルは中身も同じです。そのため、静的ビルドと共有ビルドを別々に、同じ prefix へ順にインストールすることもできます。
 
 インストールすると CMake パッケージと pkg-config のファイルが入ります。CMake では次のように使います。
 
@@ -56,15 +56,18 @@ find_package(mybinlog CONFIG REQUIRED)
 target_link_libraries(your_target PRIVATE mybinlog::mybinlog)
 ```
 
-1.0 より前はマイナーリリースで API が変わりうるため、`find_package` で版を指定すると、メジャーとマイナーが同じインストールだけに一致します。静的ライブラリのインストールは、利用側のリンクのために zlib を探し、zstd 付きでビルドされていれば zstd も探します。
+`mybinlog::mybinlog` は、利用側が `BUILD_SHARED_LIBS` を ON にしているか、共有ライブラリだけがインストールされているときは共有ライブラリを、それ以外では静的ライブラリを指します。どちらかを明示するときは `mybinlog::mybinlog_static` か `mybinlog::mybinlog_shared` を使います。静的ライブラリのターゲットは、利用側のリンクのために zlib を探し、zstd 付きでビルドされていれば zstd も探します。コンパイルには `MYBINLOG_STATIC_DEFINE` を定義します。
+
+1.0 より前はマイナーリリースで API が変わりうるため、`find_package` で版を指定すると、メジャーとマイナーが同じインストールだけに一致します。
 
 pkg-config では次のように使います。
 
 ```sh
-c++ -std=c++17 app.cpp $(pkg-config --cflags --libs mybinlog)
+c++ -std=c++17 app.cpp $(pkg-config --cflags --libs mybinlog)          # 共有
+c++ -std=c++17 app.cpp $(pkg-config --cflags --libs mybinlog-static)   # 静的
 ```
 
-静的ライブラリのインストールでは、`mybinlog.pc` がコンパイルフラグに `-DMYBINLOG_STATIC_DEFINE`、ライブラリに `-lz`、`Requires` に `libzstd` を加えるので、`--static` は要りません。
+`mybinlog.pc` は `-lmybinlog` を渡すので、両方がインストールされていればリンカは共有ライブラリを選びます。zlib と zstd は private な依存として書いてあるので、静的ライブラリだけのインストールでは `pkg-config --static` でリンクできます。`mybinlog-static.pc` は静的ライブラリと一緒に入ります。`libmybinlog.a` を直接指定し、`-DMYBINLOG_STATIC_DEFINE`、zlib、zstd を加えるので、共有ライブラリと並んでいても `--static` なしで静的にリンクされます。
 
 ## ビルドオプション
 
@@ -72,9 +75,11 @@ c++ -std=c++17 app.cpp $(pkg-config --cflags --libs mybinlog)
 |---|---|---|
 | `MYBINLOG_BUILD_TESTS` | トップレベルでは ON、取り込まれたときは OFF | ユニットテストをビルドし、googletest を取得します。 |
 | `MYBINLOG_BUILD_EXAMPLES` | トップレベルでは ON、取り込まれたときは OFF | `examples/mybinlog-dump` をビルドします。 |
-| `MYBINLOG_INSTALL` | トップレベルでは ON、取り込まれたときは OFF | インストール規則、`mybinlogConfig.cmake`、`mybinlog.pc` を生成します。 |
+| `MYBINLOG_INSTALL` | トップレベルでは ON、取り込まれたときは OFF | インストール規則、`mybinlogConfig.cmake`、`mybinlog.pc` を生成します。静的ライブラリがあれば `mybinlog-static.pc` も生成します。 |
 | `MYBINLOG_WITH_ZSTD` | トップレベルでは ON、取り込まれたときは OFF | zstd をリンクします。zstd は CMake パッケージか pkg-config（`libzstd`）で探します。見つからないと configure が警告を出し、zstd のペイロードは `kUnsupported` になります。 |
-| `BUILD_SHARED_LIBS` | OFF | 静的ライブラリの代わりに共有ライブラリをビルドします。 |
+| `BUILD_SHARED_LIBS` | OFF | 次の 2 つのオプションの既定値を共有ライブラリだけにします。両方をビルドするときは `mybinlog::mybinlog` を共有ライブラリに向けます。 |
+| `MYBINLOG_BUILD_STATIC` | `BUILD_SHARED_LIBS` が OFF なら ON | 静的ライブラリ（ターゲット `mybinlog::mybinlog_static`）をビルドします。 |
+| `MYBINLOG_BUILD_SHARED` | `BUILD_SHARED_LIBS` と同じ | 共有ライブラリ（ターゲット `mybinlog::mybinlog_shared`）をビルドします。 |
 
 ## 最初のプログラム
 

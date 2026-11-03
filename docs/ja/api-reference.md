@@ -6,7 +6,7 @@
 
 - `#include <mybinlog/mybinlog.h>` で全公開ヘッダを読み込めます。各ヘッダを単独で読み込むこともできます。
 - CMake のターゲット `mybinlog::mybinlog` をリンクするか、`pkg-config mybinlog` を使います。[はじめての利用](getting-started.md)を参照してください。
-- すべて名前空間 `mybinlog` にあります。公開の関数とクラスには `MYBINLOG_API`（生成される `mybinlog/export.h`）が付き、共有ビルドではこれだけが export されます。静的ビルドは、CMake のターゲットか `mybinlog.pc` を通じて利用側に `MYBINLOG_STATIC_DEFINE` を定義します。
+- すべて名前空間 `mybinlog` にあります。公開の関数とクラスには `MYBINLOG_API`（`mybinlog/export.h`）が付き、共有ライブラリはこれだけを export します。静的ライブラリは、CMake のターゲットか `mybinlog-static.pc` を通じて利用側に `MYBINLOG_STATIC_DEFINE` を定義します。
 - `mybinlog/version.h` は configure のときに生成され、版のマクロと `Version()` を持ちます。
 
 ## ヘッダ
