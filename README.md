@@ -29,7 +29,7 @@ include(FetchContent)
 FetchContent_Declare(
   libmybinlog
   GIT_REPOSITORY https://github.com/libraz/libmybinlog.git
-  GIT_TAG v0.3.0
+  GIT_TAG v0.3.1
 )
 FetchContent_MakeAvailable(libmybinlog)
 
