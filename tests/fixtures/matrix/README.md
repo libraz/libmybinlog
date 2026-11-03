@@ -24,7 +24,7 @@ compression, which is the configuration the products require. Each model's
 
 | Flavor | Versions | Configs |
 |---|---|---|
-| MySQL | 8.4, 9.7 | 11 (8.4: 6, 9.7: 5) |
+| MySQL | 8.4, 9.7, 26.10 | 15 (8.4: 6, 9.7: 5, 26.10: 4) |
 | MariaDB | 10.11, 11.4, 11.8, 12.3, 13.0 | 18 (10.11: 4, 11.4: 3, 11.8: 4, 12.3: 4, 13.0: 3) |
 
 ## Capturing
@@ -181,7 +181,7 @@ the decompressed one. MariaDB `JSON` is a `LONGTEXT` alias and has `text`.
 - JSON: scalars, nested documents, unicode escapes, every number kind, empty
   object/array, a document above 64 KB (large storage format); MySQL also
   opaque DATE/TIME/DATETIME/DECIMAL/binary values.
-- GEOMETRY, POINT and POLYGON with SRID 4326; VECTOR on MySQL 9.x and
+- GEOMETRY, POINT and POLYGON with SRID 4326; VECTOR on MySQL 9.0+ and
   MariaDB 11.7+.
 - MariaDB COMPRESSED BLOB/TEXT/VARCHAR (above and below
   `column_compression_threshold`), INET6, UUID (10.7+), INET4 (10.10+).

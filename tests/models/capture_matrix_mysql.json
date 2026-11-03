@@ -4,12 +4,14 @@
     "tool": "coverwise pairwise_generate",
     "strength": 2,
     "seed": 1,
-    "seeds": "one row per version with CRC32, FULL image, FULL metadata, no compression, no PARTIAL_JSON (the configuration the products require)"
+    "seeds": "one row per version with CRC32, FULL image, FULL metadata, no compression, no PARTIAL_JSON (the configuration the products require)",
+    "extended": "coverwise extend over the existing rows after 26.10 was added, seeded with its required configuration"
   },
   "model": {
     "version": [
       "8.4",
-      "9.7"
+      "9.7",
+      "26.10"
     ],
     "binlog_checksum": [
       "NONE",
@@ -130,11 +132,43 @@
       "FULL",
       "ON",
       "PARTIAL_JSON"
+    ],
+    [
+      "26.10",
+      "CRC32",
+      "FULL",
+      "FULL",
+      "OFF",
+      "EMPTY"
+    ],
+    [
+      "26.10",
+      "CRC32",
+      "NOBLOB",
+      "FULL",
+      "ON",
+      "PARTIAL_JSON"
+    ],
+    [
+      "26.10",
+      "NONE",
+      "FULL",
+      "MINIMAL",
+      "OFF",
+      "EMPTY"
+    ],
+    [
+      "26.10",
+      "NONE",
+      "MINIMAL",
+      "FULL",
+      "OFF",
+      "PARTIAL_JSON"
     ]
   ],
   "coverage": {
-    "tuples": 70,
-    "covered": 70
+    "tuples": 81,
+    "covered": 81
   },
   "configs": [
     {
@@ -266,6 +300,54 @@
         "binlog_row_image": "MINIMAL",
         "binlog_row_metadata": "FULL",
         "binlog_transaction_compression": "ON",
+        "binlog_row_value_options": "PARTIAL_JSON"
+      }
+    },
+    {
+      "name": "crc32_full_metafull_nozstd_nopjson",
+      "version": "26.10",
+      "image": "mysql:26.10",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "FULL",
+        "binlog_transaction_compression": "OFF",
+        "binlog_row_value_options": "EMPTY"
+      }
+    },
+    {
+      "name": "crc32_noblob_metafull_zstd_pjson",
+      "version": "26.10",
+      "image": "mysql:26.10",
+      "settings": {
+        "binlog_checksum": "CRC32",
+        "binlog_row_image": "NOBLOB",
+        "binlog_row_metadata": "FULL",
+        "binlog_transaction_compression": "ON",
+        "binlog_row_value_options": "PARTIAL_JSON"
+      }
+    },
+    {
+      "name": "none_full_metaminimal_nozstd_nopjson",
+      "version": "26.10",
+      "image": "mysql:26.10",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "FULL",
+        "binlog_row_metadata": "MINIMAL",
+        "binlog_transaction_compression": "OFF",
+        "binlog_row_value_options": "EMPTY"
+      }
+    },
+    {
+      "name": "none_minimal_metafull_nozstd_pjson",
+      "version": "26.10",
+      "image": "mysql:26.10",
+      "settings": {
+        "binlog_checksum": "NONE",
+        "binlog_row_image": "MINIMAL",
+        "binlog_row_metadata": "FULL",
+        "binlog_transaction_compression": "OFF",
         "binlog_row_value_options": "PARTIAL_JSON"
       }
     }

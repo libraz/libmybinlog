@@ -1,6 +1,6 @@
 # 対応状況
 
-ライブラリの対象は MySQL 8.4 と 9.x、MariaDB 10.11 以降です。下の表は、テストしているサーバーの版と binlog の設定の一覧です。リポジトリには、それぞれの設定で動かした実サーバーから採取した binlog ファイルがあります（`tests/fixtures/matrix`）。
+ライブラリの対象は MySQL 8.4、9.7、26.x と MariaDB 10.11 以降です。下の表は、テストしているサーバーの版と binlog の設定の一覧です。リポジトリには、それぞれの設定で動かした実サーバーから採取した binlog ファイルがあります（`tests/fixtures/matrix`）。
 
 表は、採取ごとの `meta.json` から生成しています。手で編集せず、次のコマンドで再生成してください。
 
@@ -19,6 +19,7 @@ python3 tools/gen_compat_table.py
 |---|---|---|---|---|---|---|---|---|
 | MySQL | 8.4 | `8.4.13` | 6 | NONE, CRC32 | FULL, MINIMAL, NOBLOB | MINIMAL, FULL | OFF, zstd | OFF, ON |
 | MySQL | 9.7 | `9.7.4` | 5 | NONE, CRC32 | FULL, MINIMAL, NOBLOB | MINIMAL, FULL | OFF, zstd | OFF, ON |
+| MySQL | 26.10 | `26.10.0` | 4 | NONE, CRC32 | FULL, MINIMAL, NOBLOB | MINIMAL, FULL | OFF, zstd | OFF, ON |
 | MariaDB | 10.11 | `10.11.19-MariaDB-ubu2204-log` | 4 | NONE, CRC32 | FULL, MINIMAL, NOBLOB | MINIMAL, FULL | OFF, zlib | - |
 | MariaDB | 11.4 | `11.4.13-MariaDB-ubu2404-log` | 3 | NONE, CRC32 | FULL, MINIMAL, NOBLOB | MINIMAL, FULL | OFF, zlib | - |
 | MariaDB | 11.8 | `11.8.9-MariaDB-ubu2404-log` | 4 | NONE, CRC32 | FULL, MINIMAL, NOBLOB | MINIMAL, FULL | OFF, zlib | - |
@@ -44,6 +45,10 @@ python3 tools/gen_compat_table.py
 | MySQL | 9.7 | CRC32 | FULL | FULL | OFF | OFF |
 | MySQL | 9.7 | CRC32 | MINIMAL | MINIMAL | OFF | ON |
 | MySQL | 9.7 | CRC32 | NOBLOB | MINIMAL | zstd | ON |
+| MySQL | 26.10 | NONE | FULL | MINIMAL | OFF | OFF |
+| MySQL | 26.10 | NONE | MINIMAL | FULL | OFF | ON |
+| MySQL | 26.10 | CRC32 | FULL | FULL | OFF | OFF |
+| MySQL | 26.10 | CRC32 | NOBLOB | FULL | zstd | ON |
 | MariaDB | 10.11 | NONE | FULL | MINIMAL | OFF | - |
 | MariaDB | 10.11 | CRC32 | FULL | FULL | OFF | - |
 | MariaDB | 10.11 | CRC32 | MINIMAL | FULL | OFF | - |

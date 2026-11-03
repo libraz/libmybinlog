@@ -1,6 +1,6 @@
 # Compatibility
 
-The library targets MySQL 8.4 and 9.x and MariaDB 10.11 and later. The tables below list the server versions and binlog configurations it is tested against: for each one, the repository holds binlog files captured from a real server running that configuration (`tests/fixtures/matrix`).
+The library targets MySQL 8.4, 9.7 and 26.x and MariaDB 10.11 and later. The tables below list the server versions and binlog configurations it is tested against: for each one, the repository holds binlog files captured from a real server running that configuration (`tests/fixtures/matrix`).
 
 The tables are generated from the `meta.json` file of each capture. Do not edit them by hand; regenerate them with:
 
@@ -19,6 +19,7 @@ Each row is one server version and the values its captures cover. "Configuration
 |---|---|---|---|---|---|---|---|---|
 | MySQL | 8.4 | `8.4.13` | 6 | NONE, CRC32 | FULL, MINIMAL, NOBLOB | MINIMAL, FULL | OFF, zstd | OFF, ON |
 | MySQL | 9.7 | `9.7.4` | 5 | NONE, CRC32 | FULL, MINIMAL, NOBLOB | MINIMAL, FULL | OFF, zstd | OFF, ON |
+| MySQL | 26.10 | `26.10.0` | 4 | NONE, CRC32 | FULL, MINIMAL, NOBLOB | MINIMAL, FULL | OFF, zstd | OFF, ON |
 | MariaDB | 10.11 | `10.11.19-MariaDB-ubu2204-log` | 4 | NONE, CRC32 | FULL, MINIMAL, NOBLOB | MINIMAL, FULL | OFF, zlib | - |
 | MariaDB | 11.4 | `11.4.13-MariaDB-ubu2404-log` | 3 | NONE, CRC32 | FULL, MINIMAL, NOBLOB | MINIMAL, FULL | OFF, zlib | - |
 | MariaDB | 11.8 | `11.8.9-MariaDB-ubu2404-log` | 4 | NONE, CRC32 | FULL, MINIMAL, NOBLOB | MINIMAL, FULL | OFF, zlib | - |
@@ -44,6 +45,10 @@ One row per capture. Compression is `zstd` for MySQL `binlog_transaction_compres
 | MySQL | 9.7 | CRC32 | FULL | FULL | OFF | OFF |
 | MySQL | 9.7 | CRC32 | MINIMAL | MINIMAL | OFF | ON |
 | MySQL | 9.7 | CRC32 | NOBLOB | MINIMAL | zstd | ON |
+| MySQL | 26.10 | NONE | FULL | MINIMAL | OFF | OFF |
+| MySQL | 26.10 | NONE | MINIMAL | FULL | OFF | ON |
+| MySQL | 26.10 | CRC32 | FULL | FULL | OFF | OFF |
+| MySQL | 26.10 | CRC32 | NOBLOB | FULL | zstd | ON |
 | MariaDB | 10.11 | NONE | FULL | MINIMAL | OFF | - |
 | MariaDB | 10.11 | CRC32 | FULL | FULL | OFF | - |
 | MariaDB | 10.11 | CRC32 | MINIMAL | FULL | OFF | - |
