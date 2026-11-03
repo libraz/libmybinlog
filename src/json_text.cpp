@@ -1,5 +1,7 @@
 #include <charconv>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <utility>
 
 #include "bytes_internal.h"
@@ -16,6 +18,8 @@ namespace {
 constexpr int kGcvtWidth = 15 + 4 + 15;
 // MAX_DECPT_FOR_F_FORMAT (DBL_DIG).
 constexpr int kMaxDecptForFixed = 15;
+// %.16e carries 17 significant digits, enough to round-trip any double.
+constexpr int kMaxRoundTripPrecision = 16;
 
 // Json_datetime::PACKED_SIZE: an int64 from TIME_to_longlong_packed.
 constexpr size_t kPackedTemporalSize = 8;
@@ -248,24 +252,34 @@ Status AppendValue(const JsonValue& value, size_t depth, std::string* out) {
 void AppendGcvt(double value, int precision, std::string* out) {
   // Shortest round-trip digits, as dtoa mode 4 with ndigits >= 17 returns them,
   // or @p precision significant digits with trailing zeros dropped.
+  // snprintf rather than std::to_chars: floating-point to_chars needs GCC 11's
+  // libstdc++, and the correctly rounded %.*e that round-trips first is the same
+  // shortest digit string.
   char buf[40];
-  const auto result =
-      precision > 0 ? std::to_chars(buf, buf + sizeof(buf), value, std::chars_format::scientific,
-                                    precision - 1)
-                    : std::to_chars(buf, buf + sizeof(buf), value, std::chars_format::scientific);
+  int written = 0;
+  if (precision > 0) {
+    written = std::snprintf(buf, sizeof(buf), "%.*e", precision - 1, value);
+  } else {
+    for (int p = 0; p <= kMaxRoundTripPrecision; ++p) {
+      written = std::snprintf(buf, sizeof(buf), "%.*e", p, value);
+      if (std::strtod(buf, nullptr) == value) break;
+    }
+  }
+  const char* end = buf + written;
   const char* p = buf;
   const bool sign = *p == '-';
   if (sign) ++p;
+  // Only ASCII alphanumerics are kept, so the locale's decimal point drops out.
   std::string digits;
-  for (; p < result.ptr && *p != 'e'; ++p) {
-    if (*p != '.') digits.push_back(*p);
+  for (; p < end && *p != 'e'; ++p) {
+    if ((*p >= '0' && *p <= '9') || (*p >= 'a' && *p <= 'z')) digits.push_back(*p);
   }
   while (digits.size() > 1 && digits.back() == '0') digits.pop_back();
   int exponent = 0;
   bool negative_exponent = false;
-  if (p < result.ptr) ++p;  // 'e'
-  if (p < result.ptr && (*p == '+' || *p == '-')) negative_exponent = *p++ == '-';
-  for (; p < result.ptr; ++p) exponent = exponent * 10 + (*p - '0');
+  if (p < end) ++p;  // 'e'
+  if (p < end && (*p == '+' || *p == '-')) negative_exponent = *p++ == '-';
+  for (; p < end; ++p) exponent = exponent * 10 + (*p - '0');
   int decpt = (negative_exponent ? -exponent : exponent) + 1;
   const int len = static_cast<int>(digits.size());
 

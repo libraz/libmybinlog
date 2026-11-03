@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include <cfloat>
+#include <clocale>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -245,6 +246,24 @@ TEST(CodecJsonText, Doubles) {
   for (const auto& [value, expected] : cases) {
     EXPECT_EQ(Text(Dbl(value)), expected) << "value " << value;
   }
+}
+
+// A decimal-comma LC_NUMERIC must not reach the digits.
+TEST(CodecJsonText, DoubleIgnoresTheNumericLocale) {
+  const std::string saved = std::setlocale(LC_NUMERIC, nullptr);
+  bool switched = false;
+  for (const char* name : {"de_DE.UTF-8", "de_DE.utf8", "fr_FR.UTF-8", "fr_FR.utf8"}) {
+    if (std::setlocale(LC_NUMERIC, name) != nullptr) {
+      switched = true;
+      break;
+    }
+  }
+  if (!switched) GTEST_SKIP() << "no decimal-comma locale installed";
+  const std::string fraction = Text(Dbl(0.1));
+  const std::string exponent = Text(Dbl(1.2345678901234567e-100));
+  std::setlocale(LC_NUMERIC, saved.c_str());
+  EXPECT_EQ(fraction, "0.1");
+  EXPECT_EQ(exponent, "1.2345678901234567e-100");
 }
 
 TEST(CodecJsonText, NonFiniteDoubleRejected) {
